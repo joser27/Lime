@@ -23,6 +23,7 @@ class LevelManager {
             this.drawGrid();
         }
 
+
     }
 
     drawGrid() {

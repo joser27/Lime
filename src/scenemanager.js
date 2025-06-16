@@ -32,10 +32,13 @@ class SceneManager {
         } else if (sceneName == "OptionsScene") {
             this.scenes.OptionsScene = new OptionsScene(this.gameEngine, this);
             this.currentScene = this.scenes.OptionsScene;
+        } else if (sceneName == "GameOverScene") {
+            this.scenes.GameOverScene = new GameOverScene(this.gameEngine, this);
+            this.currentScene = this.scenes.GameOverScene;
         }
 
-        this.gameEngine.addEntity(this.currentScene);
-
+        // Add the scene at the beginning of the entities array so it's drawn last
+        this.gameEngine.entities.unshift(this.currentScene);
     }
 
     toggleFullscreen() {

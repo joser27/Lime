@@ -133,6 +133,7 @@ class GameEngine {
         }
 
         this.camera.update(this.ctx, this);
+        // console.log("Entities:", this.entities);
     };
 
     loop() {
