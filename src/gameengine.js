@@ -14,11 +14,13 @@ class GameEngine {
         this.mouse = null;
         this.wheel = null;
         this.keys = {};
+        this.consumedKeys = {}; // Track consumed keys until key release
 
         // Options and the Details
         this.options = options || {
             debugging: false,
         };
+        this.camera = null;
     };
 
     init(ctx) {
@@ -72,12 +74,28 @@ class GameEngine {
             this.rightclick = getXandY(e);
         });
 
-        this.ctx.canvas.addEventListener("keydown", event => this.keys[event.key] = true);
-        this.ctx.canvas.addEventListener("keyup", event => this.keys[event.key] = false);
+        this.ctx.canvas.addEventListener("keydown", event => {
+            // Only set the key if it wasn't already pressed
+            if (!this.keys[event.key]) {
+                this.keys[event.key] = true;
+                this.consumedKeys[event.key] = false; // Reset consumed state only on new press
+            }
+        });
+
+        this.ctx.canvas.addEventListener("keyup", event => {
+            this.keys[event.key] = false;
+            this.consumedKeys[event.key] = false; // Reset consumed state when key is released
+        });
     };
 
     addEntity(entity) {
         this.entities.push(entity);
+    };
+
+    clearEntities() {
+        this.entities.forEach(function (entity) {
+            entity.removeFromWorld = true;
+        });
     };
 
     draw() {
@@ -88,6 +106,8 @@ class GameEngine {
         for (let i = this.entities.length - 1; i >= 0; i--) {
             this.entities[i].draw(this.ctx, this);
         }
+
+        this.camera.draw(this.ctx, this);
     };
 
     update() {
@@ -106,6 +126,8 @@ class GameEngine {
                 this.entities.splice(i, 1);
             }
         }
+
+        this.camera.update(this.ctx, this);
     };
 
     loop() {
@@ -114,6 +136,14 @@ class GameEngine {
         this.draw();
     };
 
+    // Method to check and consume a key
+    consumeKey(key) {
+        if (this.keys[key] && !this.consumedKeys[key]) {
+            this.consumedKeys[key] = true;
+            return true;
+        }
+        return false;
+    }
 };
 
 // KV Le was here :)
