@@ -1,9 +1,26 @@
-﻿
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>Game Project Title Goes Here</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+        }
+        #gameWorld {
+            display: block;
+            margin: 0 auto;
+            background: white;
+        }
+        #gameWorld:fullscreen {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+        }
+    </style>
   
     <script type="text/javascript" src="./src/assetmanager.js"></script>
     <script type="text/javascript" src="./src/timer.js"></script>
@@ -16,8 +33,9 @@
     <script type="text/javascript" src="./src/player.js"></script>
     <script type="text/javascript" src="./src/levelmanager.js"></script>
     <script type="text/javascript" src="./src/animator.js"></script>
+    <script type="text/javascript" src="./src/boundingbox.js"></script>
 </head>
 <body>
-    <canvas id="gameWorld" width="1024" height="768" style="background: white; border: 1px solid black" tabindex="0" autofocus></canvas>
+    <canvas id="gameWorld" width="1280" height="720" tabindex="0" autofocus></canvas>
 </body>
 </html>
