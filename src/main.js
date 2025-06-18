@@ -15,6 +15,9 @@ ASSET_MANAGER.downloadAll(() => {
 	const ctx = canvas.getContext("2d");
 	ctx.imageSmoothingEnabled = false;
 
+	// Initialize audio manager with the loaded assets
+	gameEngine.audioManager = new AudioManager(ASSET_MANAGER);
+
 	gameEngine.init(ctx);
 	new SceneManager(gameEngine);
 	gameEngine.start();

@@ -21,6 +21,9 @@ class GameEngine {
             debugging: false,
         };
         this.camera = null;
+        
+        // Audio manager will be initialized after asset manager is ready
+        this.audioManager = null;
     };
 
     init(ctx) {
@@ -133,6 +136,12 @@ class GameEngine {
         }
 
         this.camera.update(this.ctx, this);
+        
+        // Update audio manager if it exists
+        if (this.audioManager) {
+            this.audioManager.update();
+        }
+        
         // console.log("Entities:", this.entities);
     };
 
