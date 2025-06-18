@@ -36,6 +36,7 @@ class Player {
         this.lives = 3; // Player starts with 3 lives
         this.isInvulnerable = false; // For temporary invulnerability after getting hit
         this.invulnerabilityTimer = 0;
+        this.warningSoundTimer = 0; // Timer for warning sound
     }
 
     update() {
@@ -48,9 +49,22 @@ class Player {
             }
         }
 
-        // Apply gravity and update position
-        this.velocity += this.gravity;
-        this.y = Math.round(this.y + this.velocity);
+        // Update warning sound timer
+        if (this.warningSoundTimer > 0) {
+            this.warningSoundTimer -= this.gameEngine.clockTick;
+            if (this.warningSoundTimer <= 0) {
+                // Stop the warning sound after 2 seconds
+                const warningSound = ASSET_MANAGER.getAsset("./assets/sounds/warningsiren.mp3");
+                if (warningSound) {
+                    warningSound.pause();
+                    warningSound.currentTime = 0;
+                }
+            }
+        }
+
+        // Apply gravity and update position (frame-independent)
+        this.velocity += this.gravity * this.gameEngine.clockTick * 60; // Multiply by 60 for 60fps baseline
+        this.y = Math.round(this.y + this.velocity * this.gameEngine.clockTick * 60);
 
         // Ground collision
         if (this.y > this.groundLevel) {
@@ -59,17 +73,18 @@ class Player {
             this.isJumping = false;
         }
 
-        // Horizontal movement with boundary
+        // Horizontal movement with boundary (frame-independent)
+        const frameSpeed = this.speed * this.gameEngine.clockTick * 60;
         if (this.gameEngine.keys["d"] && this.x < this.gameEngine.ctx.canvas.width - 16 * params.scale) {
-            this.x = Math.round(this.x + this.speed);
+            this.x = Math.round(this.x + frameSpeed);
             this.direction = "right";
         }
         if (this.gameEngine.keys["a"] && this.x > 0) {
-            this.x = Math.round(this.x - this.speed);
+            this.x = Math.round(this.x - frameSpeed);
             this.direction = "left";
         }
 
-        // Jumping
+        // Jumping (frame-independent)
         if (this.gameEngine.keys[" "] && !this.isJumping) {
             this.velocity = -this.jumpStrength;
             this.isJumping = true;
@@ -85,6 +100,16 @@ class Player {
             this.isInvulnerable = true;
             this.invulnerabilityTimer = 2; // 2 seconds of invulnerability
             console.log("Damage taken - New lives:", this.lives); // Debug log
+            
+            // Play warning siren sound when taking damage
+            const warningSound = ASSET_MANAGER.getAsset("./assets/sounds/warningsiren.mp3");
+            if (warningSound) {
+                warningSound.currentTime = 0; // Reset to beginning
+                warningSound.volume = 0.5; 
+                warningSound.play().catch(e => console.log("Could not play warning sound:", e));
+                this.warningSoundTimer = 3; // Set timer to stop sound after 3 seconds
+            }
+            
             return true; // Return true if damage was taken
         }
         console.log("Player is invulnerable, no damage taken"); // Debug log

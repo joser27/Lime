@@ -4,17 +4,18 @@ class PlayingScene {
         this.sceneManager = sceneManager;
         this.jobApplications = [];
         this.spawnTimer = 0;
-        this.spawnInterval = 3000; // Spawn every 3 seconds
-        this.minSpawnInterval = 2000; // Minimum time between spawns
-        this.maxSpawnInterval = 4000; // Maximum time between spawns
+        this.spawnInterval = 2000; // Reduced from 3000 to 2000 - faster spawns
+        this.minSpawnInterval = 1500; // Reduced from 2000 to 1500
+        this.maxSpawnInterval = 3000; // Reduced from 4000 to 3000
         this.minDistanceBetweenApps = 400; // Minimum distance between job applications
         
         // Timer and speed management
         this.gameTime = 0;
-        this.baseSpeed = 5;
-        this.speedIncreaseInterval = 10; // Increase speed every 10 seconds
-        this.speedIncreaseAmount = 1; // Increase speed by 1 every interval
-        this.maxSpeed = 15; // Maximum speed cap
+        this.baseSpeed = 8; // Increased from 5 to 8 - faster base speed
+        this.speedIncreaseInterval = 5; // Reduced from 10 to 5 - speed increases more frequently
+        this.speedIncreaseAmount = 1.5; // Increased from 1 to 1.5 - bigger speed jumps
+        this.maxSpeed = 20; // Increased from 15 to 20 - higher max speed
+        this.scoreSpeedMultiplier = 0.5; // Speed increase per dodge
         
         // Score tracking
         this.score = 0;
@@ -42,10 +43,11 @@ class PlayingScene {
         const x = canvas.width;
         const y = groundLevel - 28 * params.scale;
         
-        // Calculate current speed based on game time
-        const speedMultiplier = Math.floor(this.gameTime / this.speedIncreaseInterval);
+        // Calculate current speed based on both game time and score
+        const timeMultiplier = Math.floor(this.gameTime / this.speedIncreaseInterval);
+        const scoreMultiplier = this.score * this.scoreSpeedMultiplier;
         const currentSpeed = Math.min(
-            this.baseSpeed + (speedMultiplier * this.speedIncreaseAmount),
+            this.baseSpeed + (timeMultiplier * this.speedIncreaseAmount) + scoreMultiplier,
             this.maxSpeed
         );
         
@@ -61,13 +63,48 @@ class PlayingScene {
         });
 
         if (canSpawn) {
-            const jobApp = new JobApplication(this.gameEngine, this.sceneManager, x, y, currentSpeed);
+            const jobApp = new JobApplication(this.gameEngine, this.sceneManager, x, y, currentSpeed, "horizontal");
             this.gameEngine.entities.unshift(jobApp);
             
-            this.spawnInterval = Math.random() * (this.maxSpawnInterval - this.minSpawnInterval) + this.minSpawnInterval;
+            // Spawn interval also decreases with score to make it more challenging
+            const scoreIntervalReduction = Math.min(this.score * 50, 500); // Reduce interval by up to 500ms based on score
+            const adjustedMinInterval = Math.max(this.minSpawnInterval - scoreIntervalReduction, 800); // Don't go below 800ms
+            const adjustedMaxInterval = Math.max(this.maxSpawnInterval - scoreIntervalReduction, 1500); // Don't go below 1500ms
+            
+            this.spawnInterval = Math.random() * (adjustedMaxInterval - adjustedMinInterval) + adjustedMinInterval;
             this.spawnTimer = 0;
         } else {
             this.spawnTimer = this.spawnInterval - 500;
+        }
+    }
+
+    spawnChildSupport() {
+        const canvas = this.gameEngine.ctx.canvas;
+        const x = Math.random() * (canvas.width - 306); // Random x position, accounting for child support width
+        const y = -408 * 0.5; // Start above the screen
+        
+        // Calculate current speed based on both game time and score
+        const timeMultiplier = Math.floor(this.gameTime / this.speedIncreaseInterval);
+        const scoreMultiplier = this.score * this.scoreSpeedMultiplier;
+        const currentSpeed = Math.min(
+            this.baseSpeed + (timeMultiplier * this.speedIncreaseAmount) + scoreMultiplier,
+            this.maxSpeed
+        );
+        
+        // Check if there's enough space between this and other vertical child support
+        let canSpawn = true;
+        this.gameEngine.entities.forEach(entity => {
+            if (entity instanceof ChildSupport) {
+                const horizontalDistance = Math.abs(x - entity.x);
+                if (horizontalDistance < 350) { // Minimum horizontal distance between vertical child support
+                    canSpawn = false;
+                }
+            }
+        });
+
+        if (canSpawn) {
+            const childSupport = new ChildSupport(this.gameEngine, this.sceneManager, x, y, currentSpeed, "vertical");
+            this.gameEngine.entities.unshift(childSupport);
         }
     }
 
@@ -165,13 +202,20 @@ class PlayingScene {
         // Update spawn timer
         this.spawnTimer += this.gameEngine.clockTick * 1000;
         if (this.spawnTimer >= this.spawnInterval) {
+            // Only spawn job applications horizontally
             this.spawnJobApplication();
+        }
+
+        // Spawn child support from the top based on time and score
+        const childSupportSpawnChance = 0.005 + (this.gameTime * 0.0005) + (this.score * 0.002); // Increases with time and score
+        if (this.score > 0 && Math.random() < childSupportSpawnChance) {
+            this.spawnChildSupport();
         }
 
         // Check for collisions and update score
         let collisionDetected = false;
         this.gameEngine.entities.forEach(entity => {
-            if (entity instanceof JobApplication) {
+            if (entity instanceof JobApplication || entity instanceof ChildSupport) {
                 // Debug bounding box positions
                 if (params.debug) {
                     console.log("Player BB:", {
@@ -182,7 +226,7 @@ class PlayingScene {
                         right: this.player.boundingBox.right,
                         bottom: this.player.boundingBox.bottom
                     });
-                    console.log("JobApp BB:", {
+                    console.log("Obstacle BB:", {
                         x: entity.boundingBox.x,
                         y: entity.boundingBox.y,
                         width: entity.boundingBox.width,
@@ -206,9 +250,22 @@ class PlayingScene {
                         }
                     }
                 } else if (entity.hasBeenPassed && !entity.scoreCounted) {
-                    // Increment score when player successfully passes a job application
-                    this.score++;
-                    entity.scoreCounted = true;
+                    // Only count points for job applications, not child support
+                    if (entity instanceof JobApplication) {
+                        this.score++;
+                        entity.scoreCounted = true;
+                        
+                        // Play point earned sound
+                        const pointSound = ASSET_MANAGER.getAsset("./assets/sounds/pointearned.mp3");
+                        if (pointSound) {
+                            pointSound.volume = 0.5;
+                            pointSound.currentTime = 0; // Reset to beginning
+                            pointSound.play().catch(e => console.log("Could not play point sound:", e));
+                        }
+                    } else {
+                        // Mark child support as counted but don't give points
+                        entity.scoreCounted = true;
+                    }
                 }
             }
         });

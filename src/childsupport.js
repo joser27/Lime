@@ -1,11 +1,11 @@
-class JobApplication {
+class ChildSupport {
     constructor(gameEngine, sceneManager, x, y, speed = 5, direction = "horizontal") {
         this.gameEngine = gameEngine;
         this.sceneManager = sceneManager;
         this.x = x;
         this.y = y;
-        this.width = 500*0.5;
-        this.height = 647*0.5;
+        this.width = 612 * 0.5; // 306 pixels
+        this.height = 408 * 0.5; // 204 pixels
         this.speed = speed;
         this.direction = direction; // "horizontal" or "vertical"
         this.boundingBox = new BoundingBox(this.x, this.y, this.width, this.height);
@@ -22,7 +22,7 @@ class JobApplication {
             // Move from right to left (frame-independent)
             this.x -= frameSpeed;
             
-            // Check if player has passed over this job application
+            // Check if player has passed over this child support
             if (!this.hasBeenPassed && this.gameEngine.entities.some(entity => {
                 if (entity instanceof Player) {
                     // Check if player is above the vector line and has passed the x position
@@ -42,10 +42,10 @@ class JobApplication {
             // Fall from top to bottom (frame-independent)
             this.y += frameSpeed;
             
-            // Check if player has passed under this job application
+            // Check if player has passed under this child support
             if (!this.hasBeenPassed && this.gameEngine.entities.some(entity => {
                 if (entity instanceof Player) {
-                    // Check if player is below the job application and has passed the y position
+                    // Check if player is below the child support and has passed the y position
                     return entity.y > this.y + this.height && 
                            entity.x > this.x && 
                            entity.x < this.x + this.width;
@@ -67,16 +67,16 @@ class JobApplication {
     draw() {
         const ctx = this.gameEngine.ctx;
         
-        // Draw the job application
+        // Draw the child support (using the same image for now, you can change this later)
         ctx.drawImage(
-            ASSET_MANAGER.getAsset("./assets/images/Employment-Job-Application.png"),
+            ASSET_MANAGER.getAsset("./assets/images/childsupport.png"),
             this.x,
             this.y,
             this.width,
             this.height
         );
 
-        // Draw the vector line (only for horizontal job applications and when debug is on)
+        // Draw the vector line (only for horizontal child support and when debug is on)
         if (this.direction === "horizontal" && params.debug) {
             ctx.save();
             ctx.strokeStyle = this.hasBeenPassed ? "#00FF00" : "#FF0000"; // Green if passed, red if not
@@ -97,7 +97,7 @@ class JobApplication {
 
         if (params.debug) {
             // Draw bounding box
-            ctx.strokeStyle = "red";
+            ctx.strokeStyle = "blue"; // Different color to distinguish from job applications
             ctx.lineWidth = 2;
             ctx.strokeRect(this.boundingBox.x, this.boundingBox.y, this.boundingBox.width, this.boundingBox.height);
         }
@@ -108,4 +108,3 @@ class JobApplication {
         this.boundingBox.y = this.y;
     }
 }
-
