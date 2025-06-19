@@ -15,6 +15,9 @@ class PlayingScene {
         this.player = new Player(this.gameEngine, this.sceneManager);
         this.gameEngine.addEntity(this.player);
 
+        // Set the camera to follow the player
+        this.gameEngine.camera.setTarget(this.player);
+
         // Add background last (will be drawn first)
         this.background = new Background(this.gameEngine, this.sceneManager);
         this.gameEngine.addEntity(this.background);

@@ -29,18 +29,22 @@ class LevelManager {
     drawGrid() {
         const ctx = this.gameEngine.ctx;
         
+        // Get camera offset
+        const cameraOffset = this.gameEngine.camera.getViewOffset();
+        
         // Set grid line style
         ctx.strokeStyle = "#666666";
         ctx.lineWidth = 1;
 
         // Draw vertical lines and x coordinates
         for (let x = 0; x <= this.gridWidth; x++) {
-            const screenX = this.offsetX + (x * this.tileSize * this.scale);
+            const worldX = this.offsetX + (x * this.tileSize * this.scale);
+            const screenX = worldX + cameraOffset.x;
             ctx.beginPath();
             ctx.strokeStyle = "#666666";  // Reset stroke style for grid lines
             ctx.lineWidth = 1;
-            ctx.moveTo(screenX, this.offsetY);
-            ctx.lineTo(screenX, this.offsetY + (this.gridHeight * this.tileSize * this.scale));
+            ctx.moveTo(screenX, this.offsetY + cameraOffset.y);
+            ctx.lineTo(screenX, this.offsetY + cameraOffset.y + (this.gridHeight * this.tileSize * this.scale));
             ctx.stroke();
 
             // Draw x coordinates at the top with outline
@@ -50,7 +54,7 @@ class LevelManager {
                 ctx.textBaseline = "middle";
                 const text = x.toString();
                 const textX = screenX + (this.tileSize * this.scale / 2);
-                const textY = this.offsetY - 8;
+                const textY = this.offsetY + cameraOffset.y - 8;
                 
                 // Draw text outline
                 ctx.strokeStyle = "white";
@@ -66,12 +70,13 @@ class LevelManager {
 
         // Draw horizontal lines and y coordinates
         for (let y = 0; y <= this.gridHeight; y++) {
-            const screenY = this.offsetY + (y * this.tileSize * this.scale);
+            const worldY = this.offsetY + (y * this.tileSize * this.scale);
+            const screenY = worldY + cameraOffset.y;
             ctx.beginPath();
             ctx.strokeStyle = "#666666";  // Reset stroke style for grid lines
             ctx.lineWidth = 1;
-            ctx.moveTo(this.offsetX, screenY);
-            ctx.lineTo(this.offsetX + (this.gridWidth * this.tileSize * this.scale), screenY);
+            ctx.moveTo(this.offsetX + cameraOffset.x, screenY);
+            ctx.lineTo(this.offsetX + cameraOffset.x + (this.gridWidth * this.tileSize * this.scale), screenY);
             ctx.stroke();
 
             // Draw y coordinates on the left with outline
@@ -80,7 +85,7 @@ class LevelManager {
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 const text = y.toString();
-                const textX = this.offsetX - 8;
+                const textX = this.offsetX + cameraOffset.x - 8;
                 const textY = screenY + (this.tileSize * this.scale / 2);
                 
                 // Draw text outline
@@ -99,8 +104,10 @@ class LevelManager {
         ctx.font = "bold 8px Arial";
         for (let x = 0; x < this.gridWidth; x++) {
             for (let y = 0; y < this.gridHeight; y++) {
-                const screenX = this.offsetX + (x * this.tileSize * this.scale);
-                const screenY = this.offsetY + (y * this.tileSize * this.scale);
+                const worldX = this.offsetX + (x * this.tileSize * this.scale);
+                const worldY = this.offsetY + (y * this.tileSize * this.scale);
+                const screenX = worldX + cameraOffset.x;
+                const screenY = worldY + cameraOffset.y;
                 
                 // Draw coordinate text in each cell with outline
                 const text = `${x},${y}`;

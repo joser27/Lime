@@ -4,8 +4,8 @@ class Player {
         this.sceneManager = sceneManager;
         this.x = 0;
         this.y = 0;
-        this.boundingBox = new BoundingBox(this.x, this.y, 16*params.scale, 16*params.scale);
-        this.walkAnimation = new Animator(
+        this.boundingBox = new BoundingBox(this.x, this.y, 12*params.scale, 10*params.scale);
+        this.walkRightAnimation = new Animator(
             ASSET_MANAGER.getAsset("./assets/images/Enemies.png"),
             0,  // xStart
             16*2, // yStart
@@ -13,9 +13,19 @@ class Player {
             16, // height
             6, // frameCount
             0.1, // frameDuration
-            10, // scale
+            5, // scale
             true);
-        this.idleAnimation = new Animator(
+        this.walkLeftAnimation = new Animator(
+            ASSET_MANAGER.getAsset("./assets/images/Enemies.png"),
+            16*8,  // xStart
+            16*27, // yStart
+            16, // width
+            16, // height
+            6, // frameCount
+            0.1, // frameDuration
+            5, // scale
+            true);           
+        this.idleRightAnimation = new Animator(
             ASSET_MANAGER.getAsset("./assets/images/Enemies.png"),
             0,  // xStart
             16*1, // yStart
@@ -23,21 +33,29 @@ class Player {
             16, // height
             6, // frameCount
             0.1, // frameDuration
-            10, // scale
+            5, // scale
             true);
-
+        this.idleLeftAnimation = new Animator(
+            ASSET_MANAGER.getAsset("./assets/images/Enemies.png"),
+            16*8,  // xStart
+            16*26, // yStart
+            16, // width
+            16, // height
+            6, // frameCount
+            0.1, // frameDuration
+            5, // scale
+            true);
         this.speed = 5;
         this.direction = "right";
         this.velocity = 0;
         this.gravity = 0.8;
         this.jumpStrength = 30;
-        this.groundLevel = 500;
+        this.groundLevel = 415;
         this.isJumping = false;
 
     }
 
     update() {
-
         // Apply gravity and update position (frame-independent)
         this.velocity += this.gravity * this.gameEngine.clockTick * 60; // Multiply by 60 for 60fps baseline
         this.y = Math.round(this.y + this.velocity * this.gameEngine.clockTick * 60);
@@ -74,42 +92,41 @@ class Player {
 
 
     draw() {
-        // Save the current context state
-        this.gameEngine.ctx.save();
-
-
-        const offsetX = -50;  // Move left by 50px
-        const offsetY = -50;  // Move up by 50px
-        const spriteWidth = 16 * params.scale;  // Width of the sprite after scaling
+        const spriteWidth = 16 * 5;  // Width of the sprite after scaling (16 * scale)
+        const spriteHeight = 16 * 5;  // Height of the sprite after scaling
+        const offsetX = -spriteWidth / 2 + 20;  // Center the sprite horizontally
+        const offsetY = -spriteHeight + 55;  // Move up by sprite height to align with ground
         
-        // If moving left, flip the context horizontally
-        if (this.direction === "left") {
-            // Translate to the right edge of the sprite
-            this.gameEngine.ctx.translate(this.x + spriteWidth, this.y);
-            this.gameEngine.ctx.scale(-1, 1);
-            // Draw at origin with offset
-            if (!this.gameEngine.keys["a"] && !this.gameEngine.keys["d"]) {
-                this.idleAnimation.drawFrame(this.gameEngine.clockTick, this.gameEngine.ctx, offsetX, offsetY);
+        // Apply camera offset to drawing position (already rounded in worldToScreen)
+        const screenPos = this.gameEngine.camera.worldToScreen(this.x + offsetX, this.y + offsetY);
+        
+        // Choose the appropriate animation based on direction and movement
+        let currentAnimation;
+        if (!this.gameEngine.keys["a"] && !this.gameEngine.keys["d"]) {
+            // Idle animation based on direction
+            if (this.direction === "left") {
+                currentAnimation = this.idleLeftAnimation;
             } else {
-                this.walkAnimation.drawFrame(this.gameEngine.clockTick, this.gameEngine.ctx, offsetX, offsetY);
+                currentAnimation = this.idleRightAnimation;
             }
         } else {
-            // Play idle animation when not moving horizontally
-            if (!this.gameEngine.keys["a"] && !this.gameEngine.keys["d"]) {
-                this.idleAnimation.drawFrame(this.gameEngine.clockTick, this.gameEngine.ctx, this.x + offsetX, this.y + offsetY);
+            // Walking animation based on direction
+            if (this.direction === "left") {
+                currentAnimation = this.walkLeftAnimation;
             } else {
-                this.walkAnimation.drawFrame(this.gameEngine.clockTick, this.gameEngine.ctx, this.x + offsetX, this.y + offsetY);
+                currentAnimation = this.walkRightAnimation;
             }
         }
         
-        // Restore the context state
-        this.gameEngine.ctx.restore();
+        // Draw the animation at the camera-adjusted position with pixel-perfect positioning
+        currentAnimation.drawFrame(this.gameEngine.clockTick, this.gameEngine.ctx, screenPos.x, screenPos.y);
 
         if (params.debug) {
-            //draw bounding box
+            // Apply camera offset to bounding box drawing
+            const boundingBoxScreenPos = this.gameEngine.camera.worldToScreen(this.boundingBox.x, this.boundingBox.y);
             this.gameEngine.ctx.strokeStyle = "red";
             this.gameEngine.ctx.lineWidth = 2;
-            this.gameEngine.ctx.strokeRect(this.boundingBox.x, this.boundingBox.y, this.boundingBox.width, this.boundingBox.height);
+            this.gameEngine.ctx.strokeRect(boundingBoxScreenPos.x, boundingBoxScreenPos.y, this.boundingBox.width, this.boundingBox.height);
         }
     }
 

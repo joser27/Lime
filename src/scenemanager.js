@@ -1,7 +1,7 @@
 class SceneManager {
     constructor(gameEngine) {
         this.gameEngine = gameEngine;
-        this.gameEngine.camera = this;
+        this.gameEngine.camera = new Camera(gameEngine);
         this.isFullscreen = false;
 
         this.scenes = {

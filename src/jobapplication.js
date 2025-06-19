@@ -67,11 +67,14 @@ class JobApplication {
     draw() {
         const ctx = this.gameEngine.ctx;
         
+        // Apply camera offset to drawing position
+        const screenPos = this.gameEngine.camera.worldToScreen(this.x, this.y);
+        
         // Draw the job application
         ctx.drawImage(
             ASSET_MANAGER.getAsset("./assets/images/Employment-Job-Application.png"),
-            this.x,
-            this.y,
+            screenPos.x,
+            screenPos.y,
             this.width,
             this.height
         );
@@ -82,24 +85,28 @@ class JobApplication {
             ctx.strokeStyle = this.hasBeenPassed ? "#00FF00" : "#FF0000"; // Green if passed, red if not
             ctx.lineWidth = 2;
             ctx.beginPath();
-            // Draw vertical line
-            ctx.moveTo(this.x + this.width / 2, this.y);
-            ctx.lineTo(this.x + this.width / 2, this.y - this.vectorHeight);
+            // Draw vertical line with camera offset
+            const lineStartX = screenPos.x + this.width / 2;
+            const lineStartY = screenPos.y;
+            const lineEndY = screenPos.y - this.vectorHeight;
+            ctx.moveTo(lineStartX, lineStartY);
+            ctx.lineTo(lineStartX, lineEndY);
             // Draw arrow head
             const arrowSize = 10;
-            ctx.moveTo(this.x + this.width / 2, this.y - this.vectorHeight);
-            ctx.lineTo(this.x + this.width / 2 - arrowSize, this.y - this.vectorHeight + arrowSize);
-            ctx.moveTo(this.x + this.width / 2, this.y - this.vectorHeight);
-            ctx.lineTo(this.x + this.width / 2 + arrowSize, this.y - this.vectorHeight + arrowSize);
+            ctx.moveTo(lineStartX, lineEndY);
+            ctx.lineTo(lineStartX - arrowSize, lineEndY + arrowSize);
+            ctx.moveTo(lineStartX, lineEndY);
+            ctx.lineTo(lineStartX + arrowSize, lineEndY + arrowSize);
             ctx.stroke();
             ctx.restore();
         }
 
         if (params.debug) {
-            // Draw bounding box
+            // Draw bounding box with camera offset
+            const boundingBoxScreenPos = this.gameEngine.camera.worldToScreen(this.boundingBox.x, this.boundingBox.y);
             ctx.strokeStyle = "red";
             ctx.lineWidth = 2;
-            ctx.strokeRect(this.boundingBox.x, this.boundingBox.y, this.boundingBox.width, this.boundingBox.height);
+            ctx.strokeRect(boundingBoxScreenPos.x, boundingBoxScreenPos.y, this.boundingBox.width, this.boundingBox.height);
         }
     }
 
