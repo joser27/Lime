@@ -4,7 +4,9 @@ class Player {
         this.sceneManager = sceneManager;
         this.x = 0;
         this.y = 0;
-        this.boundingBox = new BoundingBox(this.x, this.y, 12*params.scale, 10*params.scale);
+        this.width = 12 * params.scale; // Player width for collision
+        this.height = 10 * params.scale; // Player height for collision
+        this.boundingBox = new BoundingBox(this.x, this.y, this.width, this.height);
         this.walkRightAnimation = new Animator(
             ASSET_MANAGER.getAsset("./assets/images/Enemies.png"),
             0,  // xStart
@@ -56,27 +58,29 @@ class Player {
     }
 
     update() {
-        // Apply gravity and update position (frame-independent)
+        // Apply gravity (frame-independent)
         this.velocity += this.gravity * this.gameEngine.clockTick * 60; // Multiply by 60 for 60fps baseline
-        this.y = Math.round(this.y + this.velocity * this.gameEngine.clockTick * 60);
 
-        // Ground collision
-        if (this.y > this.groundLevel) {
-            this.y = this.groundLevel;
-            this.velocity = 0;
-            this.isJumping = false;
-        }
-
-        // Horizontal movement with boundary (frame-independent)
+        // Horizontal movement with collision detection (frame-independent)
         const frameSpeed = this.speed * this.gameEngine.clockTick * 60;
-        if (this.gameEngine.keys["d"] && this.x < this.gameEngine.ctx.canvas.width - 16 * params.scale) {
-            this.x = Math.round(this.x + frameSpeed);
+        let deltaX = 0;
+        
+        if (this.gameEngine.keys["d"]) {
+            deltaX = frameSpeed;
             this.direction = "right";
         }
-        if (this.gameEngine.keys["a"] && this.x > 0) {
-            this.x = Math.round(this.x - frameSpeed);
+        if (this.gameEngine.keys["a"]) {
+            deltaX = -frameSpeed;
             this.direction = "left";
         }
+        
+        // Calculate gravity-based vertical movement
+        const deltaY = this.velocity * this.gameEngine.clockTick * 60;
+        
+        // Use collision manager to handle movement
+        const newPosition = this.gameEngine.collisionManager.handlePlayerMovement(this, deltaX, deltaY);
+        this.x = Math.round(newPosition.x);
+        this.y = Math.round(newPosition.y);
 
         // Jumping (frame-independent)
         if (this.gameEngine.keys[" "] && !this.isJumping) {
@@ -88,6 +92,8 @@ class Player {
         }
 
         this.updateBoundingBox();
+        const gridPos = worldToGrid(this.x, this.y);
+        console.log(`Player position - World: (${this.x}, ${this.y}), Grid: (${gridPos.x}, ${gridPos.y})`);
     }
 
 

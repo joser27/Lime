@@ -35,6 +35,55 @@ const rgba = (r, g, b, a) => `rgba(${r}, ${g}, ${b}, ${a})`;
  */
 const hsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
 
+// === COORDINATE CONVERSION FUNCTIONS ===
+
+/**
+ * Convert world pixel coordinates to grid coordinates
+ * @param {Number} worldX World X position in pixels
+ * @param {Number} worldY World Y position in pixels
+ * @returns {Object} Grid coordinates {x, y}
+ */
+const worldToGrid = (worldX, worldY) => {
+    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    return {
+        x: Math.floor(worldX / tilePixelSize),
+        y: Math.floor(worldY / tilePixelSize)
+    };
+};
+
+/**
+ * Convert grid coordinates to world pixel coordinates
+ * @param {Number} gridX Grid X position (column)
+ * @param {Number} gridY Grid Y position (row)
+ * @returns {Object} World coordinates {x, y}
+ */
+const gridToWorld = (gridX, gridY) => {
+    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    return {
+        x: gridX * tilePixelSize,
+        y: gridY * tilePixelSize
+    };
+};
+
+/**
+ * Get the size of one tile in world pixels
+ * @returns {Number} Tile size in pixels (tileSize * scale)
+ */
+const getTilePixelSize = () => {
+    return params.tileSize * params.scale;
+};
+
+/**
+ * Snap world coordinates to the nearest grid position
+ * @param {Number} worldX World X position in pixels
+ * @param {Number} worldY World Y position in pixels
+ * @returns {Object} Snapped world coordinates {x, y}
+ */
+const snapToGrid = (worldX, worldY) => {
+    const grid = worldToGrid(worldX, worldY);
+    return gridToWorld(grid.x, grid.y);
+};
+
 /** Creates an alias for requestAnimationFrame for backwards compatibility */
 window.requestAnimFrame = (() => {
     return window.requestAnimationFrame ||

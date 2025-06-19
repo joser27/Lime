@@ -9,9 +9,9 @@ class LevelManager {
         this.gridWidth = Math.ceil(this.gameEngine.ctx.canvas.width / (this.tileSize * this.scale));
         this.gridHeight = Math.ceil(this.gameEngine.ctx.canvas.height / (this.tileSize * this.scale));
         
-        // Calculate grid offset to center it
-        this.offsetX = (this.gameEngine.ctx.canvas.width - (this.gridWidth * this.tileSize * this.scale)) / 2;
-        this.offsetY = (this.gameEngine.ctx.canvas.height - (this.gridHeight * this.tileSize * this.scale)) / 2;
+        // No offset - grid represents actual world coordinates
+        this.offsetX = 0;
+        this.offsetY = 0;
     }
 
     update() {

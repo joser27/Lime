@@ -24,6 +24,9 @@ class GameEngine {
         
         // Audio manager will be initialized after asset manager is ready
         this.audioManager = null;
+        
+        // Collision manager for handling all collision detection
+        this.collisionManager = new CollisionManager(this);
     };
 
     init(ctx) {
