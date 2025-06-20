@@ -101,7 +101,7 @@ class Player {
         const spriteWidth = 16 * 5;  // Width of the sprite after scaling (16 * scale)
         const spriteHeight = 16 * 5;  // Height of the sprite after scaling
         const offsetX = -spriteWidth / 2 + 20;  // Center the sprite horizontally
-        const offsetY = -spriteHeight + 55;  // Move up by sprite height to align with ground
+        const offsetY = -spriteHeight + 40;  // Move up by sprite height to align with ground
         
         // Apply camera offset to drawing position (already rounded in worldToScreen)
         const screenPos = this.gameEngine.camera.worldToScreen(this.x + offsetX, this.y + offsetY);
