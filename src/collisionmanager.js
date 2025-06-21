@@ -153,6 +153,24 @@ class CollisionManager {
     }
 
     /**
+     * Check if an entity is on top of another entity
+     * @param {Object} entity The entity to check (e.g., player)
+     * @param {Object} target The target entity (e.g., block)
+     * @param {Number} tolerance Tolerance in pixels for "on top" detection
+     * @returns {Boolean} True if entity is on top of target
+     */
+    isEntityOnTop(entity, target, tolerance = 5) {
+        if (!entity.boundingBox || !target.boundingBox) return false;
+        
+        // Check if entity's bottom edge is at or slightly above target's top edge
+        const entityBottom = entity.boundingBox.y + entity.boundingBox.height;
+        const targetTop = target.boundingBox.y;
+        
+        // Entity is on top if their bottom edge is within tolerance of target's top
+        return entityBottom >= targetTop - tolerance && entityBottom <= targetTop + tolerance;
+    }
+
+    /**
      * Check if a position is free of solid blocks
      * @param {Number} x X position
      * @param {Number} y Y position

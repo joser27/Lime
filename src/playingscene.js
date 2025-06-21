@@ -13,8 +13,8 @@ class PlayingScene {
         
         // Create a row of bricks at row 8 from column 0 to 13
         this.bricks = []; // Array to store all bricks
-        for (let col = 0; col <= 13; col++) {
-            const brickPos = gridToWorld(col, 8);
+        for (let col = 0; col <= 200; col++) {
+            const brickPos = gridToWorld(col, 10);
             const brick = new Brick(this.gameEngine, this.sceneManager, brickPos.x, brickPos.y);
             this.bricks.push(brick);
             this.gameEngine.addEntity(brick);
@@ -27,14 +27,23 @@ class PlayingScene {
             this.bricks.push(brick);
             this.gameEngine.addEntity(brick);
         }
+        
+        // Add some broken bricks for testing
+        const brokenBrickPos1 = gridToWorld(5, 9);
+        const brokenBrick1 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos1.x, brokenBrickPos1.y);
+        this.gameEngine.addEntity(brokenBrick1);
+        
+        const brokenBrickPos2 = gridToWorld(6, 9);
+        const brokenBrick2 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos2.x, brokenBrickPos2.y);
+        this.gameEngine.addEntity(brokenBrick2);
+        
+        const brokenBrickPos3 = gridToWorld(7, 9);
+        const brokenBrick3 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos3.x, brokenBrickPos3.y);
+        this.gameEngine.addEntity(brokenBrick3);
 
-        // Create a column of bricks at column 12 from row 0 to row 8
-        for (let row = 0; row <= 8; row++) {
-            const brickPos = gridToWorld(12, row);
-            const brick = new Brick(this.gameEngine, this.sceneManager, brickPos.x, brickPos.y);
-            this.bricks.push(brick);
-            this.gameEngine.addEntity(brick);
-        }
+        const brokenBrickPos4 = gridToWorld(8, 9);
+        const brokenBrick4 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos4.x, brokenBrickPos4.y);
+        this.gameEngine.addEntity(brokenBrick4);
 
         // You can still add individual bricks if needed
         const testBrickPos = gridToWorld(5, 5);

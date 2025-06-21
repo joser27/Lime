@@ -1,4 +1,3 @@
-
 // Base Block class with common functionality
 class Block {
     constructor(gameEngine, sceneManager, x, y) {
@@ -96,31 +95,151 @@ class BrokenBrick extends Block {
         this.isSolid = true;
         this.canBreak = true; // Can be destroyed
         this.health = 1; // Takes 1 hit to break
+        this.isBroken = false;
+        this.particles = []; // Array to store falling chunks
     }
 
     drawSprite(screenX, screenY) {
-        // Draw broken brick sprite
-        this.gameEngine.ctx.fillStyle = "#696969";
-        this.gameEngine.ctx.fillRect(screenX, screenY, this.width, this.height);
-        // Draw cracks
-        this.gameEngine.ctx.strokeStyle = "#2F2F2F";
-        this.gameEngine.ctx.beginPath();
-        this.gameEngine.ctx.moveTo(screenX + 5, screenY);
-        this.gameEngine.ctx.lineTo(screenX + 15, screenY + this.height);
-        this.gameEngine.ctx.stroke();
+        this.gameEngine.ctx.drawImage(
+            ASSET_MANAGER.getAsset("./assets/images/DarkCastle.png"),
+            16*1, 16*0,                           
+            params.tileSize, params.tileSize, 
+            screenX, screenY,               
+            this.width, this.height         
+        );
     }
 
     onPlayerCollision(player) {
-        // Maybe the brick crumbles when touched?
-        // For now, just normal collision
+        // Check if player is landing on top of the brick
+        if (this.isPlayerOnTop(player)) {
+            this.breakBrick();
+            return false; // No longer solid after breaking
+        }
+        
+        // Normal collision for other directions
         return super.onPlayerCollision(player);
     }
 
-    // Custom break behavior
+    isPlayerOnTop(player) {
+        // Use the collision manager's helper method for consistency
+        return this.gameEngine.collisionManager.isEntityOnTop(player, this);
+    }
+
+    createParticles() {
+        // Create 8-12 small chunks that fall from the brick
+        const numParticles = Math.floor(Math.random() * 5) + 8; // 8-12 particles
+        
+        for (let i = 0; i < numParticles; i++) {
+            const particle = {
+                x: this.x + Math.random() * this.width, // Random position within brick
+                y: this.y + Math.random() * this.height,
+                size: Math.random() * 12 + 8, // 8-20 pixel size (much bigger now)
+                velocityX: (Math.random() - 0.5) * 3, // Random horizontal velocity
+                velocityY: Math.random() * 2 + 1, // Downward velocity
+                gravity: 0.3,
+                life: 60, // Frames to live (1 second at 60fps)
+                rotation: Math.random() * 360, // Random rotation
+                rotationSpeed: (Math.random() - 0.5) * 10 // Random rotation speed
+            };
+            this.particles.push(particle);
+        }
+    }
+
+    updateParticles() {
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const particle = this.particles[i];
+            
+            // Update position
+            particle.x += particle.velocityX;
+            particle.y += particle.velocityY;
+            particle.velocityY += particle.gravity;
+            
+            // Update rotation
+            particle.rotation += particle.rotationSpeed;
+            
+            // Decrease life
+            particle.life--;
+            
+            // Remove dead particles
+            if (particle.life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+    }
+
+    drawParticles() {
+        const brickImage = ASSET_MANAGER.getAsset("./assets/images/DarkCastle.png");
+        
+        for (const particle of this.particles) {
+            const screenPos = this.gameEngine.camera.worldToScreen(particle.x, particle.y);
+            
+            // Save the current context state
+            this.gameEngine.ctx.save();
+            
+            // Move to particle center for rotation
+            this.gameEngine.ctx.translate(screenPos.x + particle.size/2, screenPos.y + particle.size/2);
+            
+            // Apply rotation
+            this.gameEngine.ctx.rotate(particle.rotation * Math.PI / 180);
+            
+            // Draw the small brick fragment (1/4 size of original)
+            const fragmentSize = particle.size;
+            this.gameEngine.ctx.drawImage(
+                brickImage,
+                16*1, 16*0,                           // Source: broken brick sprite
+                params.tileSize, params.tileSize,     // Source size
+                -fragmentSize/2, -fragmentSize/2,     // Destination: centered on rotation point
+                fragmentSize, fragmentSize            // Destination size
+            );
+            
+            // Restore the context state
+            this.gameEngine.ctx.restore();
+        }
+    }
+
+    update() {
+        super.update();
+        this.updateParticles();
+        
+        // Remove from world only after all particles are gone
+        if (this.isBroken && this.particles.length === 0) {
+            this.removeFromWorld = true;
+        }
+    }
+
+    draw() {
+        // Only draw the brick sprite if it's not broken
+        if (!this.isBroken) {
+            super.draw();
+        }
+        // Always draw particles if they exist
+        this.drawParticles();
+    }
+
+    breakBrick() {
+        if (!this.isBroken && this.canBreak) {
+            this.isBroken = true;
+            this.isSolid = false;
+            this.canBreak = false;
+            
+            // Create falling chunks
+            this.createParticles();
+            
+            this.gameEngine.audioManager.play("./assets/sounds/brick-falling.mp3", {
+                volume: 0.5,
+                endTime: 0.5,
+            });
+            // Play crumble sound, spawn particles, etc.
+            console.log("Broken brick crumbles!");
+            
+            // Don't remove immediately - let particles finish first
+            // this.removeFromWorld = true;
+        }
+    }
+
+    // Custom break behavior (for external breaking)
     onBreak() {
-        // Play crumble sound, spawn particles, etc.
-        console.log("Broken brick crumbles!");
-        super.onBreak();
+        this.breakBrick();
     }
 }
 

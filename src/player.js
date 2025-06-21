@@ -51,7 +51,7 @@ class Player {
         this.direction = "right";
         this.velocity = 0;
         this.gravity = 0.8;
-        this.jumpStrength = 30;
+        this.jumpStrength = 20;
         this.groundLevel = 415;
         this.isJumping = false;
 
