@@ -11,48 +11,31 @@ class PlayingScene {
         this.levelManager = new LevelManager(this.gameEngine, this.sceneManager);
         this.gameEngine.addEntity(this.levelManager);
         
-        // Create a row of bricks at row 8 from column 0 to 13
-        this.bricks = []; // Array to store all bricks
-        for (let col = 0; col <= 200; col++) {
-            const brickPos = gridToWorld(col, 10);
-            const brick = new Brick(this.gameEngine, this.sceneManager, brickPos.x, brickPos.y);
-            this.bricks.push(brick);
-            this.gameEngine.addEntity(brick);
-        }
-
-        // Create a column of bricks at column 0 from row 0 to row 8
-        for (let row = 1; row <= 8; row++) {
-            const brickPos = gridToWorld(0, row);
-            const brick = new Brick(this.gameEngine, this.sceneManager, brickPos.x, brickPos.y);
-            this.bricks.push(brick);
-            this.gameEngine.addEntity(brick);
-        }
+        // Load the Tiled map
+        this.levelManager.loadTiledMap(
+            "./assets/swampmap.tmj",           // Map file
+            "./assets/images/SwampTileset.png" // Tileset image
+        );
         
+        // Keep some example entities for testing (optional)
         // Add some broken bricks for testing
-        const brokenBrickPos1 = gridToWorld(5, 9);
-        const brokenBrick1 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos1.x, brokenBrickPos1.y);
+        const brokenBrick1 = new BrokenBrick(this.gameEngine, this.sceneManager, grid(15), grid(9));
         this.gameEngine.addEntity(brokenBrick1);
         
-        const brokenBrickPos2 = gridToWorld(6, 9);
-        const brokenBrick2 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos2.x, brokenBrickPos2.y);
+        const brokenBrick2 = new BrokenBrick(this.gameEngine, this.sceneManager, grid(16), grid(9));
         this.gameEngine.addEntity(brokenBrick2);
-        
-        const brokenBrickPos3 = gridToWorld(7, 9);
-        const brokenBrick3 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos3.x, brokenBrickPos3.y);
-        this.gameEngine.addEntity(brokenBrick3);
 
-        const brokenBrickPos4 = gridToWorld(8, 9);
-        const brokenBrick4 = new BrokenBrick(this.gameEngine, this.sceneManager, brokenBrickPos4.x, brokenBrickPos4.y);
-        this.gameEngine.addEntity(brokenBrick4);
-
-        // You can still add individual bricks if needed
-        const testBrickPos = gridToWorld(5, 5);
-        this.testBrick = new Brick(this.gameEngine, this.sceneManager, testBrickPos.x, testBrickPos.y);
-        this.gameEngine.addEntity(this.testBrick);
-
-        // Add player second
+        // Add player
         this.player = new Player(this.gameEngine, this.sceneManager);
         this.gameEngine.addEntity(this.player);
+
+        // Add MrMan enemies
+        this.mrman = []; // Array to store all MrMans
+        for (let i = 0; i <= 1; i++) {
+            const mrman = new MrMan(this.gameEngine, this.sceneManager, grid(10 + i * 3), grid(5));
+            this.mrman.push(mrman); // Add MrMan to the array   
+            this.gameEngine.addEntity(mrman);
+        }
 
         // Set the camera to follow the player
         this.gameEngine.camera.setTarget(this.player);
@@ -60,7 +43,6 @@ class PlayingScene {
         // Add background last (will be drawn first)
         this.background = new Background(this.gameEngine, this.sceneManager);
         this.gameEngine.addEntity(this.background);
-
     }
 
     draw() {
@@ -75,5 +57,90 @@ class PlayingScene {
             params.debug = !params.debug;
             console.log("Debug mode:", params.debug ? "ON" : "OFF");
         }
+        
+        // Check if player is dead (removed from world)
+        if (this.player && this.player.removeFromWorld) {
+            console.log("Game Over - Player defeated!");
+            this.sceneManager.changeScene("MenuScene");
+            return;
+        }
+        
+        // Handle player attack interactions
+        this.handlePlayerAttacks();
+        
+        // Handle MrMan attack interactions
+        this.handleMrManAttacks();
+    }
+    
+    handlePlayerAttacks() {
+        // Check punch collisions
+        if (this.player.punchBoundingBox) {
+            this.checkAttackCollisions(this.player.punchBoundingBox, "punch");
+        }
+        
+        // Check flying kick collisions
+        if (this.player.flyingKickBoundingBox) {
+            this.checkAttackCollisions(this.player.flyingKickBoundingBox, "flyingkick");
+        }
+    }
+    
+    handleMrManAttacks() {
+        // Check if MrMan array exists and iterate through each MrMan
+        if (this.mrman && this.mrman.length > 0) {
+            for (let mrman of this.mrman) {
+                // Skip if this MrMan has been removed
+                if (mrman.removeFromWorld) continue;
+                
+                const attackBox = mrman.getAttackBoundingBox();
+                if (attackBox) {
+                    // Check if MrMan's attack hits the player
+                    if (this.gameEngine.collisionManager.checkBoxCollision(attackBox, this.player.boundingBox)) {
+                        this.handleMrManAttackOnPlayer(mrman);
+                    }
+                }
+            }
+        }
+    }
+    
+    checkAttackCollisions(attackBox, attackType) {
+        // Check collision with all entities
+        for (let entity of this.gameEngine.entities) {
+            // Skip player, entities without bounding boxes, and Block entities
+            if (entity === this.player || !entity.boundingBox || entity instanceof Block) continue;
+            
+            // Check if attack box intersects with entity
+            if (this.gameEngine.collisionManager.checkBoxCollision(attackBox, entity.boundingBox)) {
+                this.handleAttackHit(entity, attackType);
+            }
+        }
+    }
+    
+    handleAttackHit(hitEntity, attackType) {
+        // Handle different entity types differently
+        if (hitEntity instanceof MrMan) {
+            this.handlePlayerAttackOnMrMan(hitEntity, attackType);
+        } else if (hitEntity instanceof BrokenBrick) {
+            this.handlePlayerAttackOnBrokenBrick(hitEntity, attackType);
+        }
+        // Note: Block entities are excluded in checkAttackCollisions
+        // Add more entity types as needed
+    }
+    
+    handlePlayerAttackOnMrMan(mrman, attackType) {
+        console.log(`Player ${attackType} hit MrMan!`);
+        // Trigger hurt state with knockback instead of immediate removal
+        mrman.getHit(attackType, this.player.direction);
+    }
+    
+    handlePlayerAttackOnBrokenBrick(brokenBrick, attackType) {
+        console.log(`Player ${attackType} hit broken brick!`);
+        // Mark broken brick for removal
+        brokenBrick.removeFromWorld = true;
+    }
+    
+    handleMrManAttackOnPlayer(mrman) {
+        console.log("MrMan's flying kick hit the player!");
+        // Damage the player with the specific MrMan that hit them
+        this.player.takeDamage(mrman);
     }
 }

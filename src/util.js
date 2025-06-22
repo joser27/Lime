@@ -1,7 +1,7 @@
 /** Global Parameters Object */
 const params = {
     tileSize: 16,
-    scale: 4,
+    scale: 3,
 };
 
 /**
@@ -66,6 +66,17 @@ const gridToWorld = (gridX, gridY) => {
 };
 
 /**
+ * Convert a single grid coordinate to world pixels
+ * Convenient shorthand for direct use in constructors
+ * @param {Number} gridCoord Grid coordinate (row or column)
+ * @returns {Number} World pixel position
+ */
+const grid = (gridCoord) => {
+    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    return gridCoord * tilePixelSize;
+};
+
+/**
  * Get the size of one tile in world pixels
  * @returns {Number} Tile size in pixels (tileSize * scale)
  */
@@ -108,4 +119,21 @@ window.requestAnimFrame = (() => {
  */
 const getDistance = (p1, p2) => {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+};
+
+/**
+ * Calculate animation scale to maintain consistency with game scale
+ * @param {Number} relativeSize How big the sprite should be relative to tiles (default: 1.25 = 25% bigger than tiles)
+ * @returns {Number} Calculated animation scale
+ */
+const getAnimationScale = (relativeSize = 1.25) => {
+    return Math.round(params.scale * relativeSize);
+};
+
+/**
+ * Get consistent character animation scale
+ * @returns {Number} Animation scale that matches current game scale
+ */
+const getCharacterScale = () => {
+    return getAnimationScale(1.25); // Characters are 25% bigger than tiles
 };

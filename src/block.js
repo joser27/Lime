@@ -352,3 +352,64 @@ class BrickLight extends Block {
     }
 }
 
+class GrassBlock extends Block {
+    constructor(gameEngine, sceneManager, x, y) {
+        super(gameEngine, sceneManager, x, y);
+        this.isSolid = true;
+        this.canBreak = false;
+    }
+
+    drawSprite(screenX, screenY) {
+        // Draw grass block sprite
+        this.gameEngine.ctx.drawImage(
+            ASSET_MANAGER.getAsset("./assets/images/grassblock.png"),
+            0, 0,                           // Source X, Y
+            16, 16,                         // Source width, height
+            screenX, screenY,               // Destination X, Y
+            this.width, this.height         // Destination width, height (scaled)
+        );
+    }
+}
+
+// TiledBlock - for blocks created from Tiled map data
+class TiledBlock extends Block {
+    constructor(gameEngine, sceneManager, x, y, tilesetImage, sourceX, sourceY, sourceWidth, sourceHeight, layerIndex = 0) {
+        super(gameEngine, sceneManager, x, y);
+        
+        // Tileset sprite information
+        this.tilesetImage = tilesetImage;
+        this.sourceX = sourceX;
+        this.sourceY = sourceY;
+        this.sourceWidth = sourceWidth;
+        this.sourceHeight = sourceHeight;
+        this.layerIndex = layerIndex; // For rendering order
+        
+        // Default properties (can be overridden based on tile properties)
+        this.isSolid = true;
+        this.canBreak = false;
+    }
+
+    drawSprite(screenX, screenY) {
+        if (this.tilesetImage) {
+            this.gameEngine.ctx.drawImage(
+                this.tilesetImage,
+                this.sourceX, this.sourceY,           // Source position in tileset
+                this.sourceWidth, this.sourceHeight, // Source size
+                screenX, screenY,                    // Destination position
+                this.width, this.height              // Destination size (scaled)
+            );
+        } else {
+            // Fallback to default block appearance
+            super.drawSprite(screenX, screenY);
+        }
+    }
+
+    // Override to customize behavior based on tile properties
+    setTileProperties(properties) {
+        if (properties) {
+            this.isSolid = properties.solid !== false; // Default to solid unless explicitly false
+            this.canBreak = properties.breakable === true;
+            this.isTransparent = properties.transparent === true;
+        }
+    }
+}
