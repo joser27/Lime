@@ -135,6 +135,28 @@ class Player {
             characterScale,   // scale - now consistent with game scale
             true // reverse
         );
+        this.facePlantLeftAnimation = new Animator(
+            ASSET_MANAGER.getAsset(`./assets/images/mrman/mrmansheet.png`),
+            16*0,  // xStart
+            16*20, // yStart
+            16, // width
+            16, // height
+            1,  // frameCount (adjust based on your sprite sheet)
+            1, // frameDuration
+            characterScale,   // scale - now consistent with game scale
+            true // reverse
+        );
+        this.facePlantRightAnimation = new Animator(
+            ASSET_MANAGER.getAsset(`./assets/images/mrman/mrmansheet.png`),
+            16*0,  // xStart
+            16*19, // yStart
+            16, // width
+            16, // height
+            1,  // frameCount (adjust based on your sprite sheet)
+            1, // frameDuration
+            characterScale,   // scale - now consistent with game scale
+            true // reverse
+        );
         this.speed = 5;
         this.direction = "right";
         this.velocity = 0;
@@ -184,6 +206,18 @@ class Player {
         this.bounceCount = 0; // Track number of bounces
         this.maxBounces = 2; // Maximum bounces before settling
         this.bounceDamping = 0.6; // Velocity reduction on each bounce
+        
+        // Fall damage system
+        this.isFalling = false; // Track if player is falling (not jumping)
+        this.fallStartY = 0; // Y position where the fall started (highest point while airborne)
+        this.isAirborne = false; // Track if player is in the air (jumping or falling)
+        this.fallDamageThreshold = 4; // Number of grid blocks before fall damage kicks in
+        this.fallDamagePerBlock = 1; // Damage per block fallen beyond threshold
+        
+        // Faceplant state (for fall damage)
+        this.isFacePlant = false; // Track if player is face-planted
+        this.facePlantTimer = 0;
+        this.facePlantDuration = 1.5; // Duration of faceplant stun in seconds
     }
 
     update() {
@@ -195,7 +229,20 @@ class Player {
         let deltaX = 0;
         let deltaY = 0;
         
-        if (this.isHurt) {
+        if (this.isFacePlant) {
+            // Handle faceplant state - player is stunned and can't move
+            this.facePlantTimer += this.gameEngine.clockTick;
+            
+            // Only apply gravity during faceplant
+            deltaY = this.velocity * this.gameEngine.clockTick * 60;
+            
+            // Check if faceplant duration is over
+            if (this.facePlantTimer >= this.facePlantDuration) {
+                this.isFacePlant = false;
+                this.facePlantTimer = 0;
+            }
+            // No other movement allowed during faceplant
+        } else if (this.isHurt) {
             // Handle hurt/knockback state
             this.hurtTimer += this.gameEngine.clockTick;
             
@@ -243,8 +290,8 @@ class Player {
             deltaY = this.velocity * this.gameEngine.clockTick * 60;
         }
         
-        // Punch input handling (only if not hurt)
-        if (!this.isHurt && this.gameEngine.consumeKey("p") && !this.isPunching && !this.isJumping && !this.isFlyingKick) {
+        // Punch input handling (only if not hurt and not face-planted)
+        if (!this.isHurt && !this.isFacePlant && this.gameEngine.consumeKey("p") && !this.isPunching && !this.isJumping && !this.isFlyingKick) {
             // Check if enough time has passed since last punch
             const currentTime = this.gameEngine.timer.gameTime;
             if ((currentTime - this.lastPunchTime) >= this.punchCooldown) {
@@ -267,8 +314,8 @@ class Player {
             }
         }
         
-        // Flying kick input handling (only if not hurt)
-        if (!this.isHurt && this.gameEngine.consumeKey("k") && !this.isFlyingKick && !this.isPunching) {
+        // Flying kick input handling (only if not hurt and not face-planted)
+        if (!this.isHurt && !this.isFacePlant && this.gameEngine.consumeKey("k") && !this.isFlyingKick && !this.isPunching) {
             // Check if enough time has passed since last flying kick
             const currentTime = this.gameEngine.timer.gameTime;
             if ((currentTime - this.lastFlyingKickTime) >= this.flyingKickCooldown) {
@@ -330,14 +377,38 @@ class Player {
             this.knockbackVelocityX *= 0.8;
         }
 
-        // Jumping (frame-independent) - only if not performing special attacks and not hurt
-        if (!this.isHurt && this.gameEngine.keys[" "] && !this.isJumping && !this.isPunching && !this.isFlyingKick) {
+        // Jumping (frame-independent) - only if not performing special attacks and not hurt and not face-planted
+        if (!this.isHurt && !this.isFacePlant && this.gameEngine.keys[" "] && !this.isJumping && !this.isPunching && !this.isFlyingKick) {
             this.gameEngine.audioManager.play("./assets/sounds/roblox-classic-jump.mp3", {
                 volume: 1,
                 playbackRate: 2.0,
             });
             this.velocity = -this.jumpStrength;
             this.isJumping = true;
+            
+            // Start airborne tracking - record current position as potential fall start
+            if (!this.isAirborne) {
+                this.isAirborne = true;
+                this.fallStartY = this.y; // Record position when becoming airborne
+            }
+        }
+        
+        // Track when player becomes airborne (falling off platforms)
+        if (this.velocity > 0 && !this.isJumping && !this.isAirborne) {
+            // Player started falling (stepped off a platform)
+            this.isAirborne = true;
+            this.isFalling = true;
+            this.fallStartY = this.y;
+        }
+        
+        // Update fall start position to highest point while airborne
+        if (this.isAirborne && this.y < this.fallStartY) {
+            this.fallStartY = this.y; // Update to highest point reached
+        }
+        
+        // Start falling state when airborne and moving downward
+        if (this.isAirborne && this.velocity > 0 && !this.isFalling) {
+            this.isFalling = true;
         }
 
         this.updateBoundingBox();
@@ -442,8 +513,15 @@ class Player {
         // Choose the appropriate animation based on state
         let currentAnimation;
         
-        if (this.isHurt) {
-            // Show hurt animation when hurt (highest priority)
+        if (this.isFacePlant) {
+            // Show faceplant animation when face-planted (highest priority)
+            if (this.direction === "left") {
+                currentAnimation = this.facePlantLeftAnimation;
+            } else {
+                currentAnimation = this.facePlantRightAnimation;
+            }
+        } else if (this.isHurt) {
+            // Show hurt animation when hurt
             if (this.direction === "left") {
                 currentAnimation = this.hurtLeftAnimation;
             } else {
@@ -513,9 +591,23 @@ class Player {
                 this.gameEngine.ctx.fillText(invulnText, invulnTextPos.x, invulnTextPos.y);
             }
             
+            // Draw faceplant state info
+            if (this.isFacePlant) {
+                const facePlantTextPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height - 100);
+                this.gameEngine.ctx.fillStyle = "orange";
+                this.gameEngine.ctx.strokeStyle = "black";
+                this.gameEngine.ctx.lineWidth = 2;
+                this.gameEngine.ctx.font = "12px Arial";
+                this.gameEngine.ctx.textAlign = "center";
+                
+                const facePlantText = `FACEPLANT: ${(this.facePlantDuration - this.facePlantTimer).toFixed(1)}s`;
+                this.gameEngine.ctx.strokeText(facePlantText, facePlantTextPos.x, facePlantTextPos.y);
+                this.gameEngine.ctx.fillText(facePlantText, facePlantTextPos.x, facePlantTextPos.y);
+            }
+            
             // Draw hurt state info
             if (this.isHurt) {
-                const hurtTextPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height - 100);
+                const hurtTextPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height - 120);
                 this.gameEngine.ctx.fillStyle = "red";
                 this.gameEngine.ctx.strokeStyle = "black";
                 this.gameEngine.ctx.lineWidth = 2;

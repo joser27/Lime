@@ -112,6 +112,14 @@ class CollisionManager {
                 // Handle different types of vertical collisions
                 if (deltaY > 0) { // Moving down (falling) - hit ground
                     player.velocity = 0;
+                    
+                    // Handle fall damage if player was airborne
+                    if (player.isAirborne) {
+                        this.handleFallDamage(player);
+                        player.isAirborne = false;
+                        player.isFalling = false;
+                    }
+                    
                     player.isJumping = false;
                 } else if (deltaY < 0) { // Moving up (jumping) - hit ceiling
                     player.velocity = 0; // Stop upward movement immediately
@@ -190,5 +198,55 @@ class CollisionManager {
         }
         
         return true;
+    }
+    
+    /**
+     * Handle fall damage calculation and application
+     * @param {Player} player The player who landed
+     */
+    handleFallDamage(player) {
+        // Calculate fall distance in pixels
+        const fallDistance = player.y - player.fallStartY;
+        
+        // Convert to grid blocks using the actual tile size (tileSize * scale = 16 * 3 = 48 pixels per block)
+        const tilePixelSize = params.tileSize * params.scale;
+        const fallBlocks = fallDistance / tilePixelSize;
+        
+        // Only apply damage if fall is greater than threshold
+        if (fallBlocks > player.fallDamageThreshold) {
+            const excessBlocks = fallBlocks - player.fallDamageThreshold;
+            const damage = Math.floor(excessBlocks * player.fallDamagePerBlock);
+            
+            if (damage > 0) {
+                console.log(`Fall damage! Fell ${fallBlocks.toFixed(1)} blocks, taking ${damage} damage`);
+                
+                // Apply damage to player
+                player.currentHealth = Math.max(0, player.currentHealth - damage);
+                
+                // Trigger faceplant state
+                player.isFacePlant = true;
+                player.facePlantTimer = 0;
+                
+                // Reset faceplant animation to start from beginning
+                if (player.direction === "left") {
+                    player.facePlantLeftAnimation.reset();
+                } else {
+                    player.facePlantRightAnimation.reset();
+                }
+                
+                // Play hurt sound for fall damage
+                this.gameEngine.audioManager.play("./assets/sounds/hurt-sound.mp3", {
+                    volume: 0.4,
+                    startTime: 4.4,
+                    endTime: 4.7,
+                });
+                
+                // Check if player died from fall damage
+                if (player.currentHealth <= 0) {
+                    console.log("Player died from fall damage! Game Over.");
+                    player.removeFromWorld = true;
+                }
+            }
+        }
     }
 } 
