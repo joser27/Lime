@@ -29,6 +29,7 @@ class AudioManager {
             startTime: options.startTime ?? 0,
             endTime: options.endTime ?? null,
             fadeIn: options.fadeIn ?? 0,
+            playbackRate: options.playbackRate ?? 1.0,
             group: options.group ?? 'sfx',
             onEnded: options.onEnded ?? null,
             id: options.id ?? `audio_${Date.now()}_${Math.random()}`
@@ -38,6 +39,7 @@ class AudioManager {
         audioInstance.volume = this.calculateVolume(config.volume, config.group);
         audioInstance.loop = config.loop;
         audioInstance.currentTime = config.startTime;
+        audioInstance.playbackRate = config.playbackRate;
 
         // Handle fade in
         if (config.fadeIn > 0) {

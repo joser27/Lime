@@ -11,7 +11,6 @@ ASSET_MANAGER.queueDownload("./assets/sounds/pointearned.mp3");
 ASSET_MANAGER.queueDownload("./assets/sounds/warningsiren.mp3");
 ASSET_MANAGER.queueDownload("./assets/images/swag.jpg");
 ASSET_MANAGER.queueDownload("./assets/images/DarkCastle.png");
-ASSET_MANAGER.queueDownload("./assets/images/dirtbackground1.png");
 
 ASSET_MANAGER.queueDownload("./assets/images/grassblock.png");
 ASSET_MANAGER.queueDownload("./assets/images/mrman/mrmansheet.png");
@@ -27,6 +26,11 @@ ASSET_MANAGER.queueDownload("./assets/images/swampbackgrounds/1.png");
 ASSET_MANAGER.queueDownload("./assets/images/swampbackgrounds/2.png");
 ASSET_MANAGER.queueDownload("./assets/images/swampbackgrounds/3.png");
 
+ASSET_MANAGER.queueDownload("./assets/sounds/hitlanding.mp3");
+ASSET_MANAGER.queueDownload("./assets/sounds/kick.mp3");
+ASSET_MANAGER.queueDownload("./assets/sounds/punch.mp3");
+ASSET_MANAGER.queueDownload("./assets/sounds/bomboclat.mp3");
+ASSET_MANAGER.queueDownload("./assets/sounds/roblox-classic-jump.mp3");
 
 ASSET_MANAGER.downloadAll(() => {
 	console.log("Asset loading complete!");

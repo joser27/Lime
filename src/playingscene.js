@@ -17,13 +17,6 @@ class PlayingScene {
             "./assets/images/SwampTileset.png" // Tileset image
         );
         
-        // Keep some example entities for testing (optional)
-        // Add some broken bricks for testing
-        const brokenBrick1 = new BrokenBrick(this.gameEngine, this.sceneManager, grid(15), grid(9));
-        this.gameEngine.addEntity(brokenBrick1);
-        
-        const brokenBrick2 = new BrokenBrick(this.gameEngine, this.sceneManager, grid(16), grid(9));
-        this.gameEngine.addEntity(brokenBrick2);
 
         // Add player
         this.player = new Player(this.gameEngine, this.sceneManager);

@@ -8,7 +8,7 @@ class Player {
         // Use consistent scaling based on game scale
         const characterScale = getCharacterScale();
         this.width = 10 * params.scale; // Player width for collision
-        this.height = 14 * params.scale; // Player height for collision
+        this.height = 12 * params.scale; // Player height for collision
         this.boundingBox = new BoundingBox(this.x, this.y, this.width, this.height);
         
         this.walkRightAnimation = new Animator(
@@ -110,6 +110,28 @@ class Player {
             16, // height
             1,  // frameCount (adjust based on your sprite sheet)
             0.1, // frameDuration
+            characterScale,   // scale - now consistent with game scale
+            true // reverse
+        );
+        this.jumpRightAnimation = new Animator(
+            ASSET_MANAGER.getAsset(`./assets/images/mrman/mrmansheet.png`),
+            16*0,  // xStart
+            16*7, // yStart
+            16, // width
+            16, // height
+            1,  // frameCount (adjust based on your sprite sheet)
+            1, // frameDuration
+            characterScale,   // scale - now consistent with game scale
+            true // reverse
+        );
+        this.jumpLeftAnimation = new Animator(
+            ASSET_MANAGER.getAsset(`./assets/images/mrman/mrmansheet.png`),
+            16*0,  // xStart
+            16*17, // yStart
+            16, // width
+            16, // height
+            1,  // frameCount (adjust based on your sprite sheet)
+            1, // frameDuration
             characterScale,   // scale - now consistent with game scale
             true // reverse
         );
@@ -231,6 +253,11 @@ class Player {
                 this.lastPunchTime = currentTime;
                 this.createPunchBoundingBox();
                 
+                // Play punch sound
+                this.gameEngine.audioManager.play("./assets/sounds/punch.mp3", {
+                    volume: 0.7,
+                });
+                
                 // Reset punch animation to start from beginning
                 if (this.direction === "left") {
                     this.punchLeftAnimation.reset();
@@ -249,6 +276,14 @@ class Player {
                 this.flyingKickTimer = 0;
                 this.lastFlyingKickTime = currentTime;
                 this.createFlyingKickBoundingBox();
+                
+                // Play kick sound
+                this.gameEngine.audioManager.play("./assets/sounds/bomboclat.mp3", {
+                    volume: 0.8,
+                    startTime: 0.2,
+                    endTime: 0.85,
+                    playbackRate: 2.0,
+                });
                 
                 // Reset flying kick animation to start from beginning
                 if (this.direction === "left") {
@@ -297,8 +332,9 @@ class Player {
 
         // Jumping (frame-independent) - only if not performing special attacks and not hurt
         if (!this.isHurt && this.gameEngine.keys[" "] && !this.isJumping && !this.isPunching && !this.isFlyingKick) {
-            this.gameEngine.audioManager.play("./assets/sounds/pointearned.mp3", {
-                volume: 0.5,
+            this.gameEngine.audioManager.play("./assets/sounds/roblox-classic-jump.mp3", {
+                volume: 1,
+                playbackRate: 2.0,
             });
             this.velocity = -this.jumpStrength;
             this.isJumping = true;
@@ -398,7 +434,7 @@ class Player {
         const spriteWidth = 16 * characterScale;  // Width of the sprite after scaling
         const spriteHeight = 16 * characterScale;  // Height of the sprite after scaling
         const offsetX = -spriteWidth / 2 + 16;  // Center the sprite horizontally
-        const offsetY = -spriteHeight + 44;  // Move up by sprite height to align with ground
+        const offsetY = -spriteHeight + 38;  // Move up by sprite height to align with ground
         
         // Apply camera offset to drawing position (already rounded in worldToScreen)
         const screenPos = this.gameEngine.camera.worldToScreen(this.x + offsetX, this.y + offsetY);
@@ -426,6 +462,13 @@ class Player {
                 currentAnimation = this.punchLeftAnimation;
             } else {
                 currentAnimation = this.punchRightAnimation;
+            }
+        } else if (this.isJumping) {
+            // Jump animation when in the air
+            if (this.direction === "left") {
+                currentAnimation = this.jumpLeftAnimation;
+            } else {
+                currentAnimation = this.jumpRightAnimation;
             }
         } else if (!this.gameEngine.keys["a"] && !this.gameEngine.keys["d"]) {
             // Idle animation based on direction

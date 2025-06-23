@@ -7,7 +7,7 @@ class MrMan {
 
         // Use consistent scaling based on game scale
         const characterScale = getCharacterScale();
-        this.width = 8 * characterScale; // Scaled width
+        this.width = 10 * characterScale; // Scaled width
         this.height = 12 * characterScale; // Scaled height
         
         // Create bounding box
@@ -255,8 +255,13 @@ class MrMan {
                     this.isWandering = false;
                     this.isIdle = false;
                     
-                    // Check if we should attack (player is close and cooldown is over)
+                    // Check if we should attack (player is close, on same grid row, and cooldown is over)
+                    const playerGridPos = worldToGrid(player.x, player.y);
+                    const mrmanGridPos = worldToGrid(this.x, this.y);
+                    const sameGridY = playerGridPos.y === mrmanGridPos.y;
+                    
                     if (distanceToPlayer <= this.attackRange && 
+                        sameGridY &&
                         !this.isAttacking && 
                         !this.isHurt && 
                         !this.isRecovering && 
@@ -265,6 +270,14 @@ class MrMan {
                         // Start flying kick attack
                         this.isAttacking = true;
                         this.attackTimer = 0;
+                        
+                        // Play kick sound for MrMan's attack
+                        this.gameEngine.audioManager.play("./assets/sounds/bomboclat.mp3", {
+                            volume: 0.8,
+                            startTime: 0.2,
+                            endTime: 0.85,
+                            playbackRate: 2.0,
+                        });
                         
                         // Face the player
                         if (player.x > this.x) {
