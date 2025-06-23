@@ -6,7 +6,7 @@ class Background {
         // Parallax settings for each layer
         this.layers = [
             {
-                image: "./assets/images/swampbackgrounds/1.png", // Furthest back
+                image: "./assets/images/swampbackgrounds/pixel1.png", // Furthest back
                 scrollSpeed: 0.2, // Slowest scroll
                 scale: 2
             },
