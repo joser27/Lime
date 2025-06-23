@@ -757,7 +757,7 @@ class MrMan {
         const screenPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height);
 
         const aniOffsetx = -14;
-        const aniOffsety = 35;
+        const aniOffsety = 18;
         
         // Choose the appropriate animation based on state and direction
         let currentAnimation;
