@@ -187,7 +187,7 @@ class Player {
         this.flyingKickBoundingBox = null; // Will be created when flying kick
         
         // Health system
-        this.maxHealth = 30; // Maximum health/lives
+        this.maxHealth = 6; // Maximum health/lives
         this.currentHealth = this.maxHealth; // Current health
         this.healthBarWidth = 60; // Width of health bar in pixels
         this.healthBarHeight = 8; // Height of health bar in pixels

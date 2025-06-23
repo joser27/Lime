@@ -29,6 +29,9 @@ ASSET_MANAGER.queueDownload("./assets/images/swampbackgrounds/3.png");
 ASSET_MANAGER.queueDownload("./assets/sounds/hitlanding.mp3");
 ASSET_MANAGER.queueDownload("./assets/sounds/kick.mp3");
 ASSET_MANAGER.queueDownload("./assets/sounds/punch.mp3");
+
+// Initialize A* pathfinding
+window.aStar = null;
 ASSET_MANAGER.queueDownload("./assets/sounds/bomboclat.mp3");
 ASSET_MANAGER.queueDownload("./assets/sounds/roblox-classic-jump.mp3");
 

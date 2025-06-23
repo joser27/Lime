@@ -27,6 +27,9 @@ class GameEngine {
         
         // Collision manager for handling all collision detection
         this.collisionManager = new CollisionManager(this);
+        
+        // A* pathfinding system
+        this.aStar = new AStar(this);
     };
 
     init(ctx) {

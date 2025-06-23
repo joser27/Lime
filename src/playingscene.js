@@ -29,6 +29,14 @@ class PlayingScene {
             this.mrman.push(mrman); // Add MrMan to the array   
             this.gameEngine.addEntity(mrman);
         }
+        
+        // Add flying enemies to demonstrate flying pathfinding
+        // this.flyingEnemies = [];
+        // for (let i = 0; i < 1; i++) {
+        //     const flyingEnemy = new FlyingEnemy(this.gameEngine, grid(15 + i * 5), grid(3));
+        //     this.flyingEnemies.push(flyingEnemy);
+        //     this.gameEngine.addEntity(flyingEnemy);
+        // }
 
         // Set the camera to follow the player
         this.gameEngine.camera.setTarget(this.player);
