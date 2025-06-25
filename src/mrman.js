@@ -122,7 +122,7 @@ class MrMan {
         );
         // Follow behavior properties
         this.followDistance = 100; // Distance to maintain from player
-        this.moveSpeed = 10; // Consistent movement speed for all states
+        this.moveSpeed = 4; // Consistent movement speed for all states
         this.direction = "right"; // Track which direction MrMan is facing
         
         // Wandering behavior properties
@@ -183,12 +183,25 @@ class MrMan {
         // Pathfinding properties
         this.currentPath = null; // Array of waypoints to follow
         this.currentWaypointIndex = 0; // Index of current waypoint
-        this.pathfindingCooldown = 0.5; // How often to recalculate path (seconds) - reduced for responsiveness
+        this.pathfindingCooldown = 0.5; // How often to recalculate path (seconds) - increased for performance
         this.lastPathfindTime = 0; // When path was last calculated
         this.waypointReachedDistance = 20; // Distance to consider waypoint reached (pixels)
         this.entityType = "ground"; // Type for pathfinding algorithm
         this.entitySize = {width: this.width, height: this.height}; // Size for pathfinding
         this.usePathfinding = true; // Toggle for pathfinding vs simple follow
+        
+        // Pathfinding optimization
+        this.lastPlayerPosition = {x: 0, y: 0}; // Track player position for change detection
+        this.playerMovementThreshold = 64; // Only recalculate if player moved this much (pixels)
+        this.maxPathfindingDistance = 400; // Don't pathfind if player is too far away
+        
+        // Stuck detection and recovery
+        this.lastPosition = {x: this.x, y: this.y}; // Track last position
+        this.stuckTimer = 0; // How long we've been stuck
+        this.stuckThreshold = 2.0; // Time before considering stuck (seconds)
+        this.isStuck = false; // Whether we're currently stuck
+        this.stuckRecoveryMode = false; // Whether we're in recovery mode
+        this.stuckRecoveryTimer = 0; // Timer for recovery actions
     }
 
     update() {
@@ -326,7 +339,17 @@ class MrMan {
                     } else if (!this.isAttacking) {
                         // Follow the player using pathfinding
                         this.updatePathfinding(player);
-                        const pathMovement = this.getPathfindingMovement();
+                        
+                        // Check for stuck condition and handle recovery
+                        this.updateStuckDetection();
+                        
+                        let pathMovement;
+                        if (this.stuckRecoveryMode) {
+                            pathMovement = this.getStuckRecoveryMovement(player);
+                        } else {
+                            pathMovement = this.getPathfindingMovement();
+                        }
+                        
                         deltaX = pathMovement * this.gameEngine.clockTick * 60;
                         
                         // Check if MrMan should jump based on pathfinding
@@ -334,8 +357,12 @@ class MrMan {
                     }
                 } else {
                     // Player out of range - wander around or idle
+                    // OPTIMIZATION: Clear pathfinding when no player
+                    if (this.currentPath) {
+                        this.currentPath = null;
+                    }
+                    
                     if (!this.isWandering && !this.isIdle) {
-                        // Just started wandering/idle cycle
                         this.startWandering();
                     } else if (this.isWandering) {
                         // Continue wandering
@@ -369,6 +396,11 @@ class MrMan {
                 }
             } else {
                 // No player found - wander around or idle
+                // OPTIMIZATION: Clear pathfinding when no player
+                if (this.currentPath) {
+                    this.currentPath = null;
+                }
+                
                 if (!this.isWandering && !this.isIdle) {
                     this.startWandering();
                 } else if (this.isWandering) {
@@ -547,15 +579,50 @@ class MrMan {
      * @param {Object} player Player entity to follow
      */
     updatePathfinding(player) {
-        if (!this.usePathfinding) {
-            return; // Pathfinding disabled
+        if (!this.usePathfinding || !player) {
+            return; // Pathfinding disabled or no player
+        }
+        
+        // OPTIMIZATION: Only pathfind when actively following player
+        // Don't pathfind when wandering, idle, attacking, hurt, or recovering
+        if (this.isWandering || this.isIdle || this.isAttacking || this.isHurt || this.isRecovering) {
+            return;
+        }
+        
+        // OPTIMIZATION: Check distance to player - don't pathfind if too far
+        const distanceToPlayer = Math.abs(player.x - this.x) + Math.abs(player.y - this.y); // Manhattan distance for speed
+        if (distanceToPlayer > this.maxPathfindingDistance) {
+            // Clear path if player is too far - saves memory
+            this.currentPath = null;
+            return;
+        }
+        
+        // OPTIMIZATION: Check if level manager exists and map is loaded (reduced frequency)
+        const levelManager = this.gameEngine.entities.find(entity => entity instanceof LevelManager);
+        if (!levelManager || !levelManager.isMapLoaded) {
+            return; // Wait for level to load
+        }
+        
+        // Debug validation: Check if blocks are properly loaded
+        if (params.debug) {
+            const totalBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block).length;
+            if (totalBlocks === 0) {
+                console.warn("MrMan pathfinding: No blocks found in game engine!");
+                return;
+            }
         }
         
         const currentTime = this.gameEngine.timer.gameTime;
         
-        // Check if enough time has passed to recalculate path
+        // OPTIMIZATION: Check pathfinding cooldown
         if (currentTime - this.lastPathfindTime < this.pathfindingCooldown) {
             return; // Still using current path
+        }
+        
+        // OPTIMIZATION: Only recalculate if player moved significantly
+        const playerMovement = Math.abs(player.x - this.lastPlayerPosition.x) + Math.abs(player.y - this.lastPlayerPosition.y);
+        if (this.currentPath && playerMovement < this.playerMovementThreshold) {
+            return; // Player hasn't moved enough to warrant recalculation
         }
         
         // Calculate new path from MrMan to player
@@ -568,10 +635,15 @@ class MrMan {
             this.currentPath = newPath;
             this.currentWaypointIndex = 1; // Skip first waypoint (current position)
             this.lastPathfindTime = currentTime;
+            this.lastPlayerPosition.x = player.x;
+            this.lastPlayerPosition.y = player.y;
         } else if (!this.currentPath) {
             // No path found and no current path - fallback to simple following
             this.currentPath = [start, goal];
             this.currentWaypointIndex = 1;
+            this.lastPathfindTime = currentTime;
+            this.lastPlayerPosition.x = player.x;
+            this.lastPlayerPosition.y = player.y;
         }
     }
     
@@ -589,8 +661,8 @@ class MrMan {
         const verticalDistance = currentWaypoint.y - this.y;
         
         // Use tighter tolerances to prevent corner cutting
-        const horizontalReachDistance = 15; // Reduced from 25
-        const verticalReachDistance = 20;   // Increased for better vertical precision
+        const horizontalReachDistance = 20; // Slightly increased for better tolerance
+        const verticalReachDistance = 25;   // Increased for better vertical tolerance
         
         // Check if we've reached the current waypoint
         const reachedHorizontally = Math.abs(horizontalDistance) <= horizontalReachDistance;
@@ -607,23 +679,55 @@ class MrMan {
             }
         }
         
-        // If we're close to the waypoint but not both horizontally and vertically,
-        // prioritize the larger distance component
+        // IMPROVED LOGIC: Handle corner cutting scenarios better
+        // If we're close horizontally but need to move vertically (falling/jumping scenarios)
         if (reachedHorizontally && !reachedVertically) {
-            // Close horizontally but not vertically - wait for vertical alignment
-            return 0;
+            // Check if we need to fall (waypoint is below us)
+            if (verticalDistance > 0) {
+                // Waypoint is below us - we might need to fall or move forward to fall
+                // Check if there's ground below the waypoint position
+                let checkX = this.x;
+                if (Math.abs(horizontalDistance) > 5) {
+                    // Still some horizontal distance - prioritize horizontal movement
+                    if (horizontalDistance > 0) {
+                        this.direction = "right";
+                        return this.moveSpeed;
+                    } else {
+                        this.direction = "left";
+                        return -this.moveSpeed;
+                    }
+                }
+                // If we're horizontally aligned, gravity will handle the vertical movement
+                return 0;
+            } else {
+                // Waypoint is above us - we need to jump, but this should be handled by jump logic
+                return 0;
+            }
         }
         
-        // Move towards current waypoint horizontally only if we have significant horizontal distance
+        // Standard horizontal movement with obstacle checking
         if (Math.abs(horizontalDistance) > 5) {
             // Check if there's an obstacle directly in front before moving
             const direction = horizontalDistance > 0 ? 1 : -1;
             const checkX = this.x + (direction * getTilePixelSize() * 0.5);
             const checkY = this.y;
             
-            // If there's an obstacle ahead, don't move horizontally (let jumping logic handle it)
+            // If there's an obstacle ahead, check if we can move around it
             if (!this.gameEngine.collisionManager.isPositionFree(checkX, checkY, this.width, this.height)) {
-                return 0;
+                // Try to continue horizontal movement for a bit to see if we can get unstuck
+                // This helps with corner cutting where MrMan gets slightly stuck on edges
+                const smallerCheckX = this.x + (direction * getTilePixelSize() * 0.25);
+                if (this.gameEngine.collisionManager.isPositionFree(smallerCheckX, checkY, this.width, this.height)) {
+                    // Can move a little bit, so continue
+                    if (horizontalDistance > 0) {
+                        this.direction = "right";
+                        return this.moveSpeed * 0.5; // Move slower when near obstacles
+                    } else {
+                        this.direction = "left";
+                        return -this.moveSpeed * 0.5;
+                    }
+                }
+                return 0; // Completely blocked, let jumping logic handle it
             }
             
             if (horizontalDistance > 0) {
@@ -886,12 +990,18 @@ class MrMan {
                 this.gameEngine.ctx.stroke();
                 this.gameEngine.ctx.setLineDash([]);
                 
-                // Draw waypoints as circles
+                // Draw waypoints as circles - simplified for performance
                 for (let i = 0; i < this.currentPath.length; i++) {
                     const waypoint = this.currentPath[i];
                     const waypointScreenPos = this.gameEngine.camera.worldToScreen(waypoint.x, waypoint.y);
                     
-                    this.gameEngine.ctx.fillStyle = i === this.currentWaypointIndex ? "rgba(255, 0, 0, 0.8)" : "rgba(255, 255, 0, 0.6)";
+                    // Color waypoints based on current target (simpler check)
+                    if (i === this.currentWaypointIndex) {
+                        this.gameEngine.ctx.fillStyle = "rgba(255, 0, 0, 0.8)"; // Red for current target
+                    } else {
+                        this.gameEngine.ctx.fillStyle = "rgba(255, 255, 0, 0.6)"; // Yellow for normal waypoints
+                    }
+                    
                     this.gameEngine.ctx.beginPath();
                     this.gameEngine.ctx.arc(waypointScreenPos.x, waypointScreenPos.y, 5, 0, 2 * Math.PI);
                     this.gameEngine.ctx.fill();
@@ -919,6 +1029,8 @@ class MrMan {
                 `Jump: ${this.isJumping}`,
                 `Wander: ${this.isWandering}`,
                 `Idle: ${this.isIdle}`,
+                `Stuck: ${this.isStuck} (${this.stuckTimer.toFixed(1)}s)`,
+                `Recovery: ${this.stuckRecoveryMode}`,
                 `Health: ${this.currentHealth}/${this.maxHealth}`,
                 `Pos: (${Math.round(this.x)}, ${Math.round(this.y)})`,
                 `Timer: ${this.isHurt ? this.hurtTimer.toFixed(2) : this.attackTimer.toFixed(2)}`,
@@ -1045,5 +1157,91 @@ class MrMan {
         }
         
         ctx.restore();
+    }
+    
+    /**
+     * Update stuck detection system
+     */
+    updateStuckDetection() {
+        const currentTime = this.gameEngine.timer.gameTime;
+        const distanceMoved = Math.abs(this.x - this.lastPosition.x) + Math.abs(this.y - this.lastPosition.y);
+        
+        // If we haven't moved much, increment stuck timer
+        if (distanceMoved < 5) { // Less than 5 pixels of movement
+            this.stuckTimer += this.gameEngine.clockTick;
+            
+            if (this.stuckTimer >= this.stuckThreshold && !this.isStuck) {
+                this.isStuck = true;
+                this.stuckRecoveryMode = true;
+                this.stuckRecoveryTimer = 0;
+                console.log("MrMan is stuck! Entering recovery mode.");
+                
+                // Clear current path to force recalculation
+                this.currentPath = null;
+            }
+        } else {
+            // We're moving, reset stuck detection
+            this.stuckTimer = 0;
+            if (this.isStuck) {
+                this.isStuck = false;
+                this.stuckRecoveryMode = false;
+                this.stuckRecoveryTimer = 0;
+                console.log("MrMan is no longer stuck.");
+            }
+        }
+        
+        // Update last position
+        this.lastPosition.x = this.x;
+        this.lastPosition.y = this.y;
+        
+        // Recovery mode timeout
+        if (this.stuckRecoveryMode) {
+            this.stuckRecoveryTimer += this.gameEngine.clockTick;
+            if (this.stuckRecoveryTimer >= 3.0) { // Exit recovery mode after 3 seconds
+                this.stuckRecoveryMode = false;
+                this.stuckRecoveryTimer = 0;
+                this.isStuck = false;
+                console.log("MrMan recovery mode timeout.");
+            }
+        }
+    }
+    
+    /**
+     * Get movement when in stuck recovery mode (simpler, more direct approach)
+     * @param {Object} player Player entity
+     * @returns {Number} Movement speed
+     */
+    getStuckRecoveryMovement(player) {
+        if (!player) return 0;
+        
+        // Simple direct movement towards player (ignore pathfinding)
+        const horizontalDistance = player.x - this.x;
+        
+        // Try to move directly towards player
+        if (Math.abs(horizontalDistance) > 10) {
+            const direction = horizontalDistance > 0 ? 1 : -1;
+            const checkX = this.x + (direction * getTilePixelSize() * 0.3);
+            const checkY = this.y;
+            
+            // If path is clear, move towards player
+            if (this.gameEngine.collisionManager.isPositionFree(checkX, checkY, this.width, this.height)) {
+                if (horizontalDistance > 0) {
+                    this.direction = "right";
+                    return this.moveSpeed * 0.7; // Slightly slower in recovery mode
+                } else {
+                    this.direction = "left";
+                    return -this.moveSpeed * 0.7;
+                }
+            } else {
+                // If blocked, try jumping
+                const currentTime = this.gameEngine.timer.gameTime;
+                if (currentTime - this.lastJumpTime >= this.jumpCooldown) {
+                    this.performJump();
+                }
+                return 0;
+            }
+        }
+        
+        return 0;
     }
 }

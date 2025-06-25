@@ -100,6 +100,8 @@ class PlayingScene {
             this.mrman.push(mrman); // Add MrMan to the array   
             this.gameEngine.addEntity(mrman);
         }
+        this.mrman2 = new MrMan(this.gameEngine, this.sceneManager, grid(10), grid(19));
+        this.gameEngine.addEntity(this.mrman2);
         
         // Add flying enemies to demonstrate flying pathfinding
         // this.flyingEnemies = [];

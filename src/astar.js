@@ -1,8 +1,9 @@
 class AStar {
     constructor(gameEngine) {
         this.gameEngine = gameEngine;
-        this.maxIterations = 1000; // Prevent infinite loops
+        this.maxIterations = 500; // Reduced from 1000 for better performance
         this.jumpHeight = 3; // Maximum blocks a ground entity can jump up
+        this.enableDebugLogging = false; // Control debug logging performance impact
     }
 
     /**
@@ -14,6 +15,12 @@ class AStar {
      * @returns {Array} Array of world coordinate waypoints or null if no path
      */
     findPath(start, goal, entityType = "ground", entitySize = {width: 32, height: 32}) {
+        // OPTIMIZATION: Only validate block visibility in debug mode
+        if (params.debug && this.enableDebugLogging && !this.validateBlockVisibility()) {
+            console.warn("A* Warning: No blocks detected, pathfinding may be inaccurate");
+            return null;
+        }
+        
         // Convert world coordinates to grid coordinates
         const startGrid = worldToGrid(start.x, start.y);
         const goalGrid = worldToGrid(goal.x, goal.y);
@@ -84,6 +91,35 @@ class AStar {
     }
     
     /**
+     * Validate that A* can see blocks in the game world
+     * @returns {Boolean} True if blocks are detected
+     */
+    validateBlockVisibility() {
+        let blockCount = 0;
+        for (let entity of this.gameEngine.entities) {
+            if (entity instanceof Block && entity.isSolid) {
+                blockCount++;
+                // Early exit optimization - we only need to know if blocks exist
+                if (blockCount > 0) break;
+            }
+        }
+        
+        if (params.debug && blockCount === 0) {
+            console.warn("A* Warning: No solid blocks found in game entities");
+        }
+        
+        return blockCount > 0;
+    }
+    
+    /**
+     * Enable or disable debug logging for performance
+     * @param {Boolean} enabled Whether to enable debug logging
+     */
+    setDebugLogging(enabled) {
+        this.enableDebugLogging = enabled;
+    }
+    
+    /**
      * Get valid neighbors for a position based on entity type
      * @param {Object} gridPos Grid coordinates {x, y}
      * @param {String} entityType "ground" or "flying"
@@ -136,29 +172,37 @@ class AStar {
                 // If can't stay at same level, find where entity would land due to gravity
                 const groundSupport = this.findGroundLevel(neighbor, entitySize);
                 if (groundSupport !== null && this.isValidPosition({x: neighbor.x, y: groundSupport}, entitySize)) {
-                    neighbors.push({x: neighbor.x, y: groundSupport});
+                    // IMPROVED: Only add falling positions if they're not too far down
+                    // This prevents corner cutting through large vertical gaps
+                    const fallDistance = groundSupport - gridPos.y;
+                    if (fallDistance <= 3) { // Max 3 tiles fall distance for smooth paths
+                        neighbors.push({x: neighbor.x, y: groundSupport});
+                    }
                 }
             }
         }
         
-        // Simple jumps (straight up, then horizontal)
-        for (let jumpHeight = 1; jumpHeight <= this.jumpHeight; jumpHeight++) {
-            // Straight up jump
+        // Conservative jumping (prioritize simple movements)
+        for (let jumpHeight = 1; jumpHeight <= Math.min(this.jumpHeight, 2); jumpHeight++) { // Limit to 2 tiles max
+            // Straight up jump (more predictable)
             const jumpPos = {x: gridPos.x, y: gridPos.y - jumpHeight};
             if (this.isValidPosition(jumpPos, entitySize) && this.canJumpTo(gridPos, jumpPos, entitySize)) {
                 neighbors.push(jumpPos);
             }
             
-            // Horizontal jumps (jump up and over obstacles)
+            // IMPROVED: More conservative horizontal jumps
             for (let dir of horizontalDirs) {
                 const horizontalJumpPos = {x: gridPos.x + dir.x, y: gridPos.y - jumpHeight};
                 
                 if (this.isValidPosition(horizontalJumpPos, entitySize) && 
                     this.canJumpTo(gridPos, horizontalJumpPos, entitySize)) {
                     
-                    // Make sure this jump makes sense (clears an obstacle)
+                    // More strict obstacle checking to prevent corner cutting
                     const obstaclePos = {x: gridPos.x + dir.x, y: gridPos.y};
-                    if (this.isSolid(obstaclePos) || !this.hasGroundSupport(obstaclePos)) {
+                    const aboveObstaclePos = {x: gridPos.x + dir.x, y: gridPos.y - 1};
+                    
+                    // Only add horizontal jump if there's a clear obstacle to jump over
+                    if (this.isSolid(obstaclePos) && !this.isSolid(aboveObstaclePos)) {
                         neighbors.push(horizontalJumpPos);
                     }
                 }
@@ -222,8 +266,8 @@ class AStar {
             return true;
         }
         
-        // For actual jumps, check if the jump arc is clear
-        const steps = Math.max(dx, Math.abs(dy)) * 2; // More granular checking
+        // For actual jumps, check if the jump arc is clear with stricter validation
+        const steps = Math.max(dx, Math.abs(dy)) * 3; // Even more granular checking
         for (let i = 1; i <= steps; i++) {
             const progress = i / steps;
             const checkX = Math.round(from.x + (to.x - from.x) * progress);
@@ -232,6 +276,19 @@ class AStar {
             
             if (this.isSolid(checkPos)) {
                 return false; // Obstacle in the way
+            }
+        }
+        
+        // Additional check: ensure we're not cutting corners on diagonal jumps
+        if (dx > 0 && dy > 0) {
+            // Check that the positions adjacent to the jump path are also clear
+            const direction = to.x > from.x ? 1 : -1;
+            const midX = from.x + direction;
+            const midY = from.y;
+            
+            // Check the intermediate horizontal position
+            if (this.isSolid({x: midX, y: midY})) {
+                return false; // Would cut through corner
             }
         }
         
@@ -264,10 +321,23 @@ class AStar {
         const worldPos = gridToWorld(gridPos.x, gridPos.y);
         const tileSize = getTilePixelSize();
         
+        // Debug: Count total blocks in the world for validation
+        if (this.debugLogging) {
+            const totalBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block).length;
+            const solidBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block && entity.isSolid).length;
+            console.log(`A* isSolid check - Total blocks: ${totalBlocks}, Solid blocks: ${solidBlocks}, Checking pos: (${gridPos.x}, ${gridPos.y}) -> world: (${worldPos.x}, ${worldPos.y})`);
+        }
+        
         // Check if this position collides with any solid blocks
-        return !this.gameEngine.collisionManager.isPositionFree(
-            worldPos.x, worldPos.y, tileSize, tileSize
+        // Use full tile size to ensure accurate block detection
+        const isFree = this.gameEngine.collisionManager.isPositionFree(
+            worldPos.x, 
+            worldPos.y, 
+            tileSize, 
+            tileSize
         );
+        
+        return !isFree;
     }
     
     /**
@@ -364,15 +434,34 @@ class AStar {
             const curr = gridPath[i];
             const next = gridPath[i + 1];
             
+            // IMPROVED: More conservative simplification to prevent corner cutting
+            
             // Always keep waypoints that involve vertical movement (jumps/falls)
             if (Math.abs(curr.y - prev.y) > 0 || Math.abs(next.y - curr.y) > 0) {
                 simplified.push(curr);
                 continue;
             }
             
-            // For horizontal movement, check if we can skip this waypoint
+            // Always keep waypoints that change direction significantly
+            const prevDirection = {x: curr.x - prev.x, y: curr.y - prev.y};
+            const nextDirection = {x: next.x - curr.x, y: next.y - curr.y};
+            
+            // If direction changes, keep the waypoint
+            if (prevDirection.x !== nextDirection.x || prevDirection.y !== nextDirection.y) {
+                simplified.push(curr);
+                continue;
+            }
+            
+            // For straight horizontal movement, be more conservative about skipping waypoints
             if (!this.canTraverseDirect(prev, next)) {
                 simplified.push(curr); // Keep waypoint if direct path is blocked
+            } else {
+                // Even if direct traversal is possible, keep waypoints every few tiles
+                // to prevent long straight paths that might cut corners
+                const distanceFromLast = Math.abs(curr.x - simplified[simplified.length - 1].x);
+                if (distanceFromLast >= 3) { // Keep waypoint every 3 tiles
+                    simplified.push(curr);
+                }
             }
         }
         

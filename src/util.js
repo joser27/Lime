@@ -44,7 +44,7 @@ const hsl = (h, s, l) => `hsl(${h}, ${s}%, ${l}%)`;
  * @returns {Object} Grid coordinates {x, y}
  */
 const worldToGrid = (worldX, worldY) => {
-    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    const tilePixelSize = params.tileSize * params.scale;
     return {
         x: Math.floor(worldX / tilePixelSize),
         y: Math.floor(worldY / tilePixelSize)
@@ -58,7 +58,7 @@ const worldToGrid = (worldX, worldY) => {
  * @returns {Object} World coordinates {x, y}
  */
 const gridToWorld = (gridX, gridY) => {
-    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    const tilePixelSize = params.tileSize * params.scale;
     return {
         x: gridX * tilePixelSize,
         y: gridY * tilePixelSize
@@ -72,7 +72,7 @@ const gridToWorld = (gridX, gridY) => {
  * @returns {Number} World pixel position
  */
 const grid = (gridCoord) => {
-    const tilePixelSize = params.tileSize * params.scale; // 16 * 4 = 64 pixels per tile
+    const tilePixelSize = params.tileSize * params.scale; // 16 * 3 = 48 pixels per tile
     return gridCoord * tilePixelSize;
 };
 

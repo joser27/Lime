@@ -387,6 +387,9 @@ class TiledBlock extends Block {
         // Default properties (can be overridden based on tile properties)
         this.isSolid = true;
         this.canBreak = false;
+        
+        // Ensure bounding box is properly created with the correct size
+        this.boundingBox = new BoundingBox(this.x, this.y, this.width, this.height);
     }
 
     drawSprite(screenX, screenY) {

@@ -190,9 +190,11 @@ class CollisionManager {
         const testBox = new BoundingBox(x, y, width, height);
         
         for (let entity of this.gameEngine.entities) {
-            if (entity instanceof Block && entity.isSolid) {
-                if (this.checkBoxCollision(testBox, entity.boundingBox)) {
-                    return false;
+            if (entity instanceof Block) {
+                if (entity.isSolid) {
+                    if (this.checkBoxCollision(testBox, entity.boundingBox)) {
+                        return false;
+                    }
                 }
             }
         }
