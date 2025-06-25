@@ -122,14 +122,13 @@ class MrMan {
         );
         // Follow behavior properties
         this.followDistance = 100; // Distance to maintain from player
-        this.followSpeed = 3; // Speed at which MrMan follows
+        this.moveSpeed = 10; // Consistent movement speed for all states
         this.direction = "right"; // Track which direction MrMan is facing
         
         // Wandering behavior properties
         this.isWandering = true; // Track if MrMan is wandering
         this.isIdle = false; // Track if MrMan is idle
         this.wanderDirection = "right"; // Direction for wandering
-        this.wanderSpeed = 2; // Speed during wandering (slower than following)
         this.wanderTimer = 0; // Timer for wandering/idle
         this.wanderDuration = 0; // How long to wander in current direction
         this.idleDuration = 0; // How long to idle
@@ -340,7 +339,7 @@ class MrMan {
                         this.startWandering();
                     } else if (this.isWandering) {
                         // Continue wandering
-                        const frameSpeed = this.wanderSpeed * this.gameEngine.clockTick * 60;
+                        const frameSpeed = this.moveSpeed * this.gameEngine.clockTick * 60;
                         
                         // Calculate how far we've moved from start position
                         const distanceMoved = Math.abs(this.x - this.startWanderX);
@@ -374,7 +373,7 @@ class MrMan {
                     this.startWandering();
                 } else if (this.isWandering) {
                     // Continue wandering
-                    const frameSpeed = this.wanderSpeed * this.gameEngine.clockTick * 60;
+                    const frameSpeed = this.moveSpeed * this.gameEngine.clockTick * 60;
                     
                     // Calculate how far we've moved from start position
                     const distanceMoved = Math.abs(this.x - this.startWanderX);
@@ -629,10 +628,10 @@ class MrMan {
             
             if (horizontalDistance > 0) {
                 this.direction = "right";
-                return this.followSpeed;
+                return this.moveSpeed;
             } else {
                 this.direction = "left";
-                return -this.followSpeed;
+                return -this.moveSpeed;
             }
         }
         
