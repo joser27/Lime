@@ -25,6 +25,21 @@ class AStar {
         const startGrid = worldToGrid(start.x, start.y);
         const goalGrid = worldToGrid(goal.x, goal.y);
         
+        // PERFORMANCE: Early bailout for impossible/unnecessary paths
+        const distance = Math.abs(goalGrid.x - startGrid.x) + Math.abs(goalGrid.y - startGrid.y);
+        
+        // Don't attempt extremely long paths - they're usually unnecessary and expensive
+        if (distance > 40) {
+            return null;
+        }
+        
+        // If goal is very close and clear, return simple path
+        if (distance <= 2) {
+            if (this.canMoveDirect(start, goal, entityType, entitySize)) {
+                return [start, goal];
+            }
+        }
+        
         // Check if start and goal are valid
         if (!this.isValidPosition(startGrid, entitySize) || !this.isValidPosition(goalGrid, entitySize)) {
             return null;
@@ -266,8 +281,8 @@ class AStar {
             return true;
         }
         
-        // For actual jumps, check if the jump arc is clear with stricter validation
-        const steps = Math.max(dx, Math.abs(dy)) * 3; // Even more granular checking
+        // For actual jumps, check if the jump arc is clear
+        const steps = Math.max(dx, Math.abs(dy)) * 2; // Balanced granular checking
         for (let i = 1; i <= steps; i++) {
             const progress = i / steps;
             const checkX = Math.round(from.x + (to.x - from.x) * progress);
@@ -320,13 +335,6 @@ class AStar {
         // Convert grid to world coordinates
         const worldPos = gridToWorld(gridPos.x, gridPos.y);
         const tileSize = getTilePixelSize();
-        
-        // Debug: Count total blocks in the world for validation
-        if (this.debugLogging) {
-            const totalBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block).length;
-            const solidBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block && entity.isSolid).length;
-            console.log(`A* isSolid check - Total blocks: ${totalBlocks}, Solid blocks: ${solidBlocks}, Checking pos: (${gridPos.x}, ${gridPos.y}) -> world: (${worldPos.x}, ${worldPos.y})`);
-        }
         
         // Check if this position collides with any solid blocks
         // Use full tile size to ensure accurate block detection

@@ -136,7 +136,7 @@ class MrMan {
         this.wanderMaxTime = 8; // Maximum time to idle between wanders (seconds)
         this.wanderDistance = grid(2); // Distance to wander (2 tiles)
         this.startWanderX = 0; // Starting X position for current wander
-        this.detectionRange = 300; // Range at which MrMan detects player and starts following
+        this.detectionRange = 400; // Range at which MrMan detects player and starts following
         
         // Attack behavior properties
         this.attackRange = 200; // Distance at which MrMan will attack (increased from 50)
@@ -198,10 +198,11 @@ class MrMan {
         // Stuck detection and recovery
         this.lastPosition = {x: this.x, y: this.y}; // Track last position
         this.stuckTimer = 0; // How long we've been stuck
-        this.stuckThreshold = 2.0; // Time before considering stuck (seconds)
+        this.stuckThreshold = 3.0; // Time before considering stuck (increased to prevent false positives)
         this.isStuck = false; // Whether we're currently stuck
         this.stuckRecoveryMode = false; // Whether we're in recovery mode
         this.stuckRecoveryTimer = 0; // Timer for recovery actions
+        this.lastStuckCheck = 0; // Performance: throttle stuck detection
     }
 
     update() {
@@ -583,6 +584,9 @@ class MrMan {
             return; // Pathfinding disabled or no player
         }
         
+        // Get current time at the beginning of the method
+        const currentTime = this.gameEngine.timer.gameTime;
+        
         // OPTIMIZATION: Only pathfind when actively following player
         // Don't pathfind when wandering, idle, attacking, hurt, or recovering
         if (this.isWandering || this.isIdle || this.isAttacking || this.isHurt || this.isRecovering) {
@@ -597,22 +601,26 @@ class MrMan {
             return;
         }
         
+        // PERFORMANCE: Don't pathfind if stuck and not in recovery mode
+        // This prevents expensive repeated pathfinding attempts when clearly stuck
+        if (this.isStuck && !this.stuckRecoveryMode) {
+            return;
+        }
+        
         // OPTIMIZATION: Check if level manager exists and map is loaded (reduced frequency)
         const levelManager = this.gameEngine.entities.find(entity => entity instanceof LevelManager);
         if (!levelManager || !levelManager.isMapLoaded) {
             return; // Wait for level to load
         }
         
-        // Debug validation: Check if blocks are properly loaded
-        if (params.debug) {
+        // Debug validation: Check if blocks are properly loaded (throttled)
+        if (params.debug && currentTime - this.lastPathfindTime > 5.0) { // Only check every 5+ seconds
             const totalBlocks = this.gameEngine.entities.filter(entity => entity instanceof Block).length;
             if (totalBlocks === 0) {
                 console.warn("MrMan pathfinding: No blocks found in game engine!");
                 return;
             }
         }
-        
-        const currentTime = this.gameEngine.timer.gameTime;
         
         // OPTIMIZATION: Check pathfinding cooldown
         if (currentTime - this.lastPathfindTime < this.pathfindingCooldown) {
@@ -1160,15 +1168,22 @@ class MrMan {
     }
     
     /**
-     * Update stuck detection system
+     * Update stuck detection system (throttled for performance)
      */
     updateStuckDetection() {
         const currentTime = this.gameEngine.timer.gameTime;
+        
+        // PERFORMANCE: Only check stuck detection every 0.5 seconds
+        if (currentTime - this.lastStuckCheck < 0.5) {
+            return;
+        }
+        this.lastStuckCheck = currentTime;
+        
         const distanceMoved = Math.abs(this.x - this.lastPosition.x) + Math.abs(this.y - this.lastPosition.y);
         
         // If we haven't moved much, increment stuck timer
-        if (distanceMoved < 5) { // Less than 5 pixels of movement
-            this.stuckTimer += this.gameEngine.clockTick;
+        if (distanceMoved < 10) { // Increased threshold to 10 pixels to be less sensitive
+            this.stuckTimer += 0.5; // Add the check interval
             
             if (this.stuckTimer >= this.stuckThreshold && !this.isStuck) {
                 this.isStuck = true;
@@ -1178,6 +1193,9 @@ class MrMan {
                 
                 // Clear current path to force recalculation
                 this.currentPath = null;
+                
+                // PERFORMANCE: Increase pathfinding cooldown when stuck to prevent spam
+                this.pathfindingCooldown = 2.0; // Increase to 2 seconds when stuck
             }
         } else {
             // We're moving, reset stuck detection
@@ -1186,6 +1204,7 @@ class MrMan {
                 this.isStuck = false;
                 this.stuckRecoveryMode = false;
                 this.stuckRecoveryTimer = 0;
+                this.pathfindingCooldown = 0.5; // Reset to normal cooldown
                 console.log("MrMan is no longer stuck.");
             }
         }
@@ -1196,11 +1215,12 @@ class MrMan {
         
         // Recovery mode timeout
         if (this.stuckRecoveryMode) {
-            this.stuckRecoveryTimer += this.gameEngine.clockTick;
-            if (this.stuckRecoveryTimer >= 3.0) { // Exit recovery mode after 3 seconds
+            this.stuckRecoveryTimer += 0.5; // Add the check interval
+            if (this.stuckRecoveryTimer >= 5.0) { // Increased timeout to 5 seconds
                 this.stuckRecoveryMode = false;
                 this.stuckRecoveryTimer = 0;
                 this.isStuck = false;
+                this.pathfindingCooldown = 0.5; // Reset to normal cooldown
                 console.log("MrMan recovery mode timeout.");
             }
         }

@@ -159,11 +159,17 @@ class Player {
         );
         this.speed = 5;
         this.direction = "right";
-        this.velocity = 0;
+        this.velocity = 0; // Vertical velocity for gravity/jumping
+        this.horizontalVelocity = 0; // Horizontal velocity for friction movement
         this.gravity = 0.9;
         this.jumpStrength = 17;
         this.groundLevel = 415;
         this.isJumping = false;
+        
+        // Friction/acceleration system (Mario Bros-style)
+        this.maxSpeed = 5; // Maximum horizontal speed
+        this.acceleration = 0.5; // How quickly player accelerates
+        this.friction = 0.85; // Friction multiplier (0.85 = 15% speed loss per frame)
         
         // Punch state tracking
         this.isPunching = false;
@@ -233,6 +239,13 @@ class Player {
             // Handle faceplant state - player is stunned and can't move
             this.facePlantTimer += this.gameEngine.clockTick;
             
+            // Apply friction during faceplant
+            this.horizontalVelocity *= this.friction;
+            if (Math.abs(this.horizontalVelocity) < 0.1) {
+                this.horizontalVelocity = 0;
+            }
+            deltaX = this.horizontalVelocity * this.gameEngine.clockTick * 60;
+            
             // Only apply gravity during faceplant
             deltaY = this.velocity * this.gameEngine.clockTick * 60;
             
@@ -273,17 +286,57 @@ class Player {
                 } else {
                     deltaX = -flyingKickFrameSpeed;
                 }
+                // Clear horizontal velocity during flying kick to prevent interference
+                this.horizontalVelocity = 0;
             }
             // Only allow normal movement if not performing special attacks
             else if (!this.isPunching) {
+                // Friction-based horizontal movement system (Mario Bros style)
+                let targetVelocity = 0;
+                
                 if (this.gameEngine.keys["d"]) {
-                    deltaX = frameSpeed;
+                    targetVelocity = this.maxSpeed;
                     this.direction = "right";
                 }
                 if (this.gameEngine.keys["a"]) {
-                    deltaX = -frameSpeed;
+                    targetVelocity = -this.maxSpeed;
                     this.direction = "left";
                 }
+                
+                // Apply acceleration towards target velocity or friction towards zero
+                if (targetVelocity !== 0) {
+                    // Accelerating towards target speed
+                    const accelerationAmount = this.acceleration * this.gameEngine.clockTick * 60;
+                    if (Math.abs(targetVelocity - this.horizontalVelocity) < accelerationAmount) {
+                        // Close enough to target velocity, snap to it
+                        this.horizontalVelocity = targetVelocity;
+                    } else {
+                        // Accelerate towards target velocity
+                        if (targetVelocity > this.horizontalVelocity) {
+                            this.horizontalVelocity += accelerationAmount;
+                        } else {
+                            this.horizontalVelocity -= accelerationAmount;
+                        }
+                    }
+                } else {
+                    // Apply friction when no input
+                    this.horizontalVelocity *= this.friction;
+                    
+                    // Stop completely when velocity is very small to prevent jittering
+                    if (Math.abs(this.horizontalVelocity) < 0.1) {
+                        this.horizontalVelocity = 0;
+                    }
+                }
+                
+                // Apply horizontal velocity to movement
+                deltaX = this.horizontalVelocity * this.gameEngine.clockTick * 60;
+            } else {
+                // Apply friction when punching (can't move but should slow down)
+                this.horizontalVelocity *= this.friction;
+                if (Math.abs(this.horizontalVelocity) < 0.1) {
+                    this.horizontalVelocity = 0;
+                }
+                deltaX = this.horizontalVelocity * this.gameEngine.clockTick * 60;
             }
             
             // Calculate gravity-based vertical movement
@@ -677,6 +730,28 @@ class Player {
                 this.gameEngine.ctx.lineWidth = 4;
                 this.gameEngine.ctx.strokeRect(kickBoxScreenPos.x, kickBoxScreenPos.y, this.flyingKickBoundingBox.width, this.flyingKickBoundingBox.height);
             }
+            
+            // Draw friction/velocity debug info
+            const velocityTextPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height - 160);
+            this.gameEngine.ctx.fillStyle = "cyan";
+            this.gameEngine.ctx.strokeStyle = "black";
+            this.gameEngine.ctx.lineWidth = 2;
+            this.gameEngine.ctx.font = "12px Arial";
+            this.gameEngine.ctx.textAlign = "center";
+            
+            const velocityInfo = [
+                `H-Vel: ${this.horizontalVelocity.toFixed(2)}`,
+                `V-Vel: ${this.velocity.toFixed(2)}`,
+                `Max Speed: ${this.maxSpeed}`,
+                `Accel: ${this.acceleration}`,
+                `Friction: ${this.friction}`
+            ];
+            
+            velocityInfo.forEach((info, index) => {
+                const textY = velocityTextPos.y + (index * 14);
+                this.gameEngine.ctx.strokeText(info, velocityTextPos.x, textY);
+                this.gameEngine.ctx.fillText(info, velocityTextPos.x, textY);
+            });
         }
     }
 
