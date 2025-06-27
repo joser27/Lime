@@ -3,69 +3,48 @@ class Background {
         this.gameEngine = gameEngine;
         this.sceneManager = sceneManager;
         
-        // Parallax settings for each layer
-        this.layers = [
-            {
-                image: "./assets/images/swampbackgrounds/pixel1.png", // Furthest back
-                scrollSpeed: 0.2, // Slowest scroll
-                scale: 2
-            },
-            {
-                image: "./assets/images/swampbackgrounds/2.png", // Middle layer
-                scrollSpeed: 0.5, // Medium scroll
-                scale: 2
-            },
-            {
-                image: "./assets/images/swampbackgrounds/3.png", // Closest layer
-                scrollSpeed: 0.8, // Fastest scroll
-                scale: 2
-            }
-        ];
+        // Simple background image
+        this.backgroundImage = "./assets/images/background10.png";
+        this.scale = 1; // Scale factor for the background
     }
 
     update() {
     }
 
     draw() {
-        // Get camera position for parallax calculation
-        const cameraOffset = this.gameEngine.camera.getViewOffset();
+        const backgroundImg = ASSET_MANAGER.getAsset(this.backgroundImage);
+        if (!backgroundImg) return; // Skip if image not loaded
         
-        // Draw each parallax layer
-        this.layers.forEach((layer, index) => {
-            this.drawParallaxLayer(layer, cameraOffset);
-        });
-    }
-    
-    drawParallaxLayer(layer, cameraOffset) {
-        const backgroundImage = ASSET_MANAGER.getAsset(layer.image);
-        if (!backgroundImage) return; // Skip if image not loaded
-        
-        const imageWidth = backgroundImage.width * layer.scale;
-        const imageHeight = backgroundImage.height * layer.scale;
-        
-        // Calculate parallax offset (camera movement * scroll speed)
-        const parallaxOffsetX = cameraOffset.x * layer.scrollSpeed;
-        const parallaxOffsetY = cameraOffset.y * layer.scrollSpeed;
+        // Use smaller scale for zoomed out effect
+        const zoomedScale = this.scale * 0.5; // Zoom out by making background smaller
+        const imageWidth = backgroundImg.width * zoomedScale;
+        const imageHeight = backgroundImg.height * zoomedScale;
         
         // Calculate how many images we need to tile to cover the screen
         const screenWidth = this.gameEngine.ctx.canvas.width;
         const screenHeight = this.gameEngine.ctx.canvas.height;
         
-        // Calculate starting positions to ensure we cover the entire screen
-        const startX = Math.floor(-parallaxOffsetX / imageWidth) - 1;
-        const endX = Math.ceil((screenWidth - parallaxOffsetX) / imageWidth) + 1;
-        const startY = Math.floor(-parallaxOffsetY / imageHeight) - 1;
-        const endY = Math.ceil((screenHeight - parallaxOffsetY) / imageHeight) + 1;
+        // Calculate number of tiles needed (extra tiles to ensure full coverage)
+        const tilesX = Math.ceil(screenWidth / imageWidth) + 2;
+        const tilesY = Math.ceil(screenHeight / imageHeight) + 2;
         
-        // Draw tiled background images
-        for (let x = startX; x <= endX; x++) {
-            for (let y = startY; y <= endY; y++) {
-                const drawX = x * imageWidth + parallaxOffsetX;
-                const drawY = y * imageHeight + parallaxOffsetY;
+        // Start from a fixed world position (0,0) to make background static
+        const worldStartX = 0;
+        const worldStartY = 0;
+        
+        // Draw tiled background images to cover entire screen
+        for (let x = 0; x < tilesX; x++) {
+            for (let y = 0; y < tilesY; y++) {
+                // Calculate world position for this tile
+                const worldX = worldStartX + (x * imageWidth);
+                const worldY = worldStartY + (y * imageHeight);
+                
+                // Convert world position to screen position using camera
+                const screenPos = this.gameEngine.camera.worldToScreen(worldX, worldY);
                 
                 this.gameEngine.ctx.drawImage(
-                    backgroundImage,
-                    drawX, drawY,
+                    backgroundImg,
+                    screenPos.x, screenPos.y,
                     imageWidth, imageHeight
                 );
             }
