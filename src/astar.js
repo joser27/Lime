@@ -1,13 +1,15 @@
 class AStar {
     constructor(gameEngine) {
         this.gameEngine = gameEngine;
-        this.maxIterations = 500; // Reduced from 1000 for better performance
-        this.jumpHeight = 3; // Maximum blocks a ground entity can jump up
-        this.enableDebugLogging = false; // Control debug logging performance impact
+        this.maxIterations = 200; // Reduced for faster pathfinding
+        this.maxJumpHeight = 3; // Maximum blocks a ground entity can jump up
+        this.maxJumpDistance = 4; // Maximum horizontal distance for jumps
+        this.enableDebugLogging = false;
+        this.debugCollisionChecks = false; // Separate flag for collision debugging
     }
 
     /**
-     * Find a path from start to goal
+     * Find a path from start to goal using simplified platformer pathfinding
      * @param {Object} start World coordinates {x, y}
      * @param {Object} goal World coordinates {x, y}
      * @param {String} entityType "ground" or "flying"
@@ -15,43 +17,66 @@ class AStar {
      * @returns {Array} Array of world coordinate waypoints or null if no path
      */
     findPath(start, goal, entityType = "ground", entitySize = {width: 32, height: 32}) {
-        // OPTIMIZATION: Only validate block visibility in debug mode
-        if (params.debug && this.enableDebugLogging && !this.validateBlockVisibility()) {
-            console.warn("A* Warning: No blocks detected, pathfinding may be inaccurate");
-            return null;
-        }
-        
         // Convert world coordinates to grid coordinates
         const startGrid = worldToGrid(start.x, start.y);
         const goalGrid = worldToGrid(goal.x, goal.y);
         
-        // PERFORMANCE: Early bailout for impossible/unnecessary paths
+        // Early bailout for distant targets
         const distance = Math.abs(goalGrid.x - startGrid.x) + Math.abs(goalGrid.y - startGrid.y);
-        
-        // Don't attempt extremely long paths - they're usually unnecessary and expensive
-        if (distance > 40) {
+        if (distance > 30) {
             return null;
         }
         
-        // If goal is very close and clear, return simple path
-        if (distance <= 2) {
-            if (this.canMoveDirect(start, goal, entityType, entitySize)) {
-                return [start, goal];
+        // Quick line-of-sight check for simple cases
+        if (distance <= 3 && this.canReachDirect(start, goal, entityType, entitySize)) {
+            if (this.enableDebugLogging) {
+                console.log(`A* using direct path (entity size: ${entitySize.width}x${entitySize.height})`);
             }
+            return [start, goal];
         }
         
-        // Check if start and goal are valid
-        if (!this.isValidPosition(startGrid, entitySize) || !this.isValidPosition(goalGrid, entitySize)) {
-            return null;
+        // Use simplified A* with reactive rules
+        const path = this.simpleAStar(startGrid, goalGrid, entityType, entitySize);
+        
+        if (path && this.enableDebugLogging) {
+            console.log(`A* found path with ${path.length} waypoints (entity size: ${entitySize.width}x${entitySize.height})`);
+            console.log(`Path waypoints:`, path.map(p => `(${p.gridX || 'N/A'},${p.gridY || 'N/A'})`));
+            
+            // Validate the path by checking each waypoint
+            console.log("=== PATH VALIDATION ===");
+            for (let i = 0; i < path.length; i++) {
+                const waypoint = path[i];
+                const gridPos = worldToGrid(waypoint.x, waypoint.y);
+                const isSolid = this.isSolid(gridPos, entitySize);
+                console.log(`Waypoint ${i}: world(${waypoint.x.toFixed(1)},${waypoint.y.toFixed(1)}) grid(${gridPos.x},${gridPos.y}) ${isSolid ? 'SOLID!' : 'free'}`);
+                
+                // Check path between waypoints
+                if (i > 0) {
+                    const prevWaypoint = path[i-1];
+                    const prevGrid = worldToGrid(prevWaypoint.x, prevWaypoint.y);
+                    const currentGrid = gridPos;
+                    
+                    console.log(`=== CHECKING PATH FROM WAYPOINT ${i-1} TO ${i} ===`);
+                    const pathClear = this.validatePathBetweenWaypoints(prevGrid, currentGrid, entitySize);
+                    console.log(`Path from (${prevGrid.x},${prevGrid.y}) to (${currentGrid.x},${currentGrid.y}): ${pathClear ? 'CLEAR' : 'BLOCKED!'}`);
+                }
+            }
+        } else if (this.enableDebugLogging) {
+            console.log(`A* failed to find path (entity size: ${entitySize.width}x${entitySize.height})`);
         }
         
-        // A* algorithm
+        return path;
+    }
+    
+    /**
+     * Simplified A* that focuses on reachability rather than precise physics
+     */
+    simpleAStar(startGrid, goalGrid, entityType, entitySize) {
         const openSet = [startGrid];
         const cameFrom = new Map();
         const gScore = new Map();
         const fScore = new Map();
         
-        // Initialize scores
         const startKey = this.getGridKey(startGrid);
         gScore.set(startKey, 0);
         fScore.set(startKey, this.heuristic(startGrid, goalGrid));
@@ -61,7 +86,7 @@ class AStar {
         while (openSet.length > 0 && iterations < this.maxIterations) {
             iterations++;
             
-            // Find node with lowest fScore
+            // Find lowest fScore
             let current = openSet.reduce((min, node) => {
                 const nodeKey = this.getGridKey(node);
                 const minKey = this.getGridKey(min);
@@ -76,24 +101,24 @@ class AStar {
             
             // Check if we reached the goal
             if (current.x === goalGrid.x && current.y === goalGrid.y) {
-                return this.reconstructPath(cameFrom, current);
+                return this.reconstructSimplePath(cameFrom, current);
             }
             
-            // Get neighbors based on entity type
-            const neighbors = this.getNeighbors(current, entityType, entitySize);
+            // Get simple neighbors
+            const neighbors = this.getSimpleNeighbors(current, entityType, entitySize);
             
             for (let neighbor of neighbors) {
                 const currentKey = this.getGridKey(current);
                 const neighborKey = this.getGridKey(neighbor);
                 
-                const tentativeGScore = gScore.get(currentKey) + this.getMoveCost(current, neighbor, entityType);
+                const moveCost = this.getSimpleMoveCost(current, neighbor);
+                const tentativeGScore = gScore.get(currentKey) + moveCost;
                 
                 if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
                     cameFrom.set(neighborKey, current);
                     gScore.set(neighborKey, tentativeGScore);
                     fScore.set(neighborKey, tentativeGScore + this.heuristic(neighbor, goalGrid));
                     
-                    // Add to openSet if not already there
                     if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
                         openSet.push(neighbor);
                     }
@@ -101,51 +126,17 @@ class AStar {
             }
         }
         
-        // No path found
-        return null;
+        return null; // No path found
     }
     
     /**
-     * Validate that A* can see blocks in the game world
-     * @returns {Boolean} True if blocks are detected
+     * Get simple neighbors using basic platformer movement rules
      */
-    validateBlockVisibility() {
-        let blockCount = 0;
-        for (let entity of this.gameEngine.entities) {
-            if (entity instanceof Block && entity.isSolid) {
-                blockCount++;
-                // Early exit optimization - we only need to know if blocks exist
-                if (blockCount > 0) break;
-            }
-        }
-        
-        if (params.debug && blockCount === 0) {
-            console.warn("A* Warning: No solid blocks found in game entities");
-        }
-        
-        return blockCount > 0;
-    }
-    
-    /**
-     * Enable or disable debug logging for performance
-     * @param {Boolean} enabled Whether to enable debug logging
-     */
-    setDebugLogging(enabled) {
-        this.enableDebugLogging = enabled;
-    }
-    
-    /**
-     * Get valid neighbors for a position based on entity type
-     * @param {Object} gridPos Grid coordinates {x, y}
-     * @param {String} entityType "ground" or "flying"
-     * @param {Object} entitySize {width, height} in world pixels
-     * @returns {Array} Array of valid neighbor grid positions
-     */
-    getNeighbors(gridPos, entityType, entitySize) {
+    getSimpleNeighbors(gridPos, entityType, entitySize) {
         const neighbors = [];
         
         if (entityType === "flying") {
-            // Flying entities can move in 8 directions
+            // Flying entities: 8-directional movement
             const directions = [
                 {x: -1, y: 0}, {x: 1, y: 0},   // Left, Right
                 {x: 0, y: -1}, {x: 0, y: 1},   // Up, Down
@@ -159,151 +150,103 @@ class AStar {
                     neighbors.push(neighbor);
                 }
             }
-        } else if (entityType === "ground") {
-            // Ground entities need to consider gravity and jumping
-            this.addGroundNeighbors(gridPos, neighbors, entitySize);
+        } else {
+            // Ground entities: Use simple platformer rules
+            this.addSimpleGroundNeighbors(gridPos, neighbors, entitySize);
         }
         
         return neighbors;
     }
     
     /**
-     * Add valid neighbors for ground entities (considering gravity and jumping)
-     * @param {Object} gridPos Current grid position
-     * @param {Array} neighbors Array to add valid neighbors to
-     * @param {Object} entitySize Entity size in world pixels
+     * Add neighbors for ground entities using simple rules
      */
-    addGroundNeighbors(gridPos, neighbors, entitySize) {
-        // Horizontal movement (left and right) - stay on same level if possible
+    addSimpleGroundNeighbors(gridPos, neighbors, entitySize) {
+        // 1. Horizontal movement (left/right) - walk on same level
         const horizontalDirs = [{x: -1, y: 0}, {x: 1, y: 0}];
         
         for (let dir of horizontalDirs) {
             const neighbor = {x: gridPos.x + dir.x, y: gridPos.y};
             
-            // First try to stay at the same level
-            if (this.isValidPosition(neighbor, entitySize) && this.hasGroundSupport(neighbor)) {
+            // Can walk if position is free and has ground support
+            if (this.isValidPosition(neighbor, entitySize) && this.hasGroundSupport(neighbor, entitySize)) {
                 neighbors.push(neighbor);
-            } else {
-                // If can't stay at same level, find where entity would land due to gravity
-                const groundSupport = this.findGroundLevel(neighbor, entitySize);
-                if (groundSupport !== null && this.isValidPosition({x: neighbor.x, y: groundSupport}, entitySize)) {
-                    // IMPROVED: Only add falling positions if they're not too far down
-                    // This prevents corner cutting through large vertical gaps
-                    const fallDistance = groundSupport - gridPos.y;
-                    if (fallDistance <= 3) { // Max 3 tiles fall distance for smooth paths
-                        neighbors.push({x: neighbor.x, y: groundSupport});
+            }
+            // Or can walk off edge and fall (let gravity handle it)
+            else if (this.isValidPosition(neighbor, entitySize)) {
+                // Find where we would land
+                const landingY = this.findGroundLevel(neighbor, entitySize);
+                if (landingY !== null && landingY - gridPos.y <= 4) { // Max 4 tile fall
+                    // CRITICAL: Check if the path from current position to landing is clear
+                    if (this.validatePathBetweenWaypoints(gridPos, {x: neighbor.x, y: landingY}, entitySize)) {
+                        neighbors.push({x: neighbor.x, y: landingY});
+                    }
+                }
+            }
+            
+            // Simple jumping: if blocked horizontally, try jumping up 1-3 tiles
+            if (!this.isValidPosition(neighbor, entitySize) || !this.hasGroundSupport(neighbor, entitySize)) {
+                for (let jumpHeight = 1; jumpHeight <= this.maxJumpHeight; jumpHeight++) {
+                    const jumpPos = {x: gridPos.x + dir.x, y: gridPos.y - jumpHeight};
+                    
+                    if (this.isValidPosition(jumpPos, entitySize)) {
+                        // Check if we can actually make this jump (simple check)
+                        if (this.canJumpSimple(gridPos, jumpPos, entitySize)) {
+                            // CRITICAL: Validate the jump path doesn't go through blocks
+                            if (this.validatePathBetweenWaypoints(gridPos, jumpPos, entitySize)) {
+                                neighbors.push(jumpPos);
+                            }
+                        }
                     }
                 }
             }
         }
         
-        // Conservative jumping (prioritize simple movements)
-        for (let jumpHeight = 1; jumpHeight <= Math.min(this.jumpHeight, 2); jumpHeight++) { // Limit to 2 tiles max
-            // Straight up jump (more predictable)
-            const jumpPos = {x: gridPos.x, y: gridPos.y - jumpHeight};
-            if (this.isValidPosition(jumpPos, entitySize) && this.canJumpTo(gridPos, jumpPos, entitySize)) {
-                neighbors.push(jumpPos);
+        // 2. Vertical movement - straight up jumps (only allow single-step jumps)
+        for (let jumpHeight = 1; jumpHeight <= Math.min(2, this.maxJumpHeight); jumpHeight++) {
+            const upPos = {x: gridPos.x, y: gridPos.y - jumpHeight};
+            if (this.isValidPosition(upPos, entitySize)) {
+                // CRITICAL: Check path is clear for vertical jumps too
+                if (this.validatePathBetweenWaypoints(gridPos, upPos, entitySize)) {
+                    neighbors.push(upPos);
+                }
             }
-            
-            // IMPROVED: More conservative horizontal jumps
-            for (let dir of horizontalDirs) {
-                const horizontalJumpPos = {x: gridPos.x + dir.x, y: gridPos.y - jumpHeight};
-                
-                if (this.isValidPosition(horizontalJumpPos, entitySize) && 
-                    this.canJumpTo(gridPos, horizontalJumpPos, entitySize)) {
-                    
-                    // More strict obstacle checking to prevent corner cutting
-                    const obstaclePos = {x: gridPos.x + dir.x, y: gridPos.y};
-                    const aboveObstaclePos = {x: gridPos.x + dir.x, y: gridPos.y - 1};
-                    
-                    // Only add horizontal jump if there's a clear obstacle to jump over
-                    if (this.isSolid(obstaclePos) && !this.isSolid(aboveObstaclePos)) {
-                        neighbors.push(horizontalJumpPos);
-                    }
+        }
+        
+        // 3. Fall straight down (only allow single-step falls to prevent going through blocks)
+        for (let fallDistance = 1; fallDistance <= 4; fallDistance++) {
+            const fallPos = {x: gridPos.x, y: gridPos.y + fallDistance};
+            if (this.isValidPosition(fallPos, entitySize) && this.hasGroundSupport(fallPos, entitySize)) {
+                // CRITICAL: Check if fall path is clear
+                if (this.validatePathBetweenWaypoints(gridPos, fallPos, entitySize)) {
+                    neighbors.push(fallPos);
+                    break; // Stop at first valid landing spot
                 }
             }
         }
     }
     
     /**
-     * Check if a position has ground support (solid block below it)
-     * @param {Object} gridPos Grid position to check
-     * @returns {Boolean} True if there's solid ground below this position
+     * Simple jump check - just verify path is mostly clear
      */
-    hasGroundSupport(gridPos) {
-        const groundPos = {x: gridPos.x, y: gridPos.y + 1};
-        return this.isSolid(groundPos);
-    }
-    
-    /**
-     * Find the ground level for a given x position (where entity would land due to gravity)
-     * @param {Object} gridPos Grid position to check
-     * @param {Object} entitySize Entity size in world pixels
-     * @returns {Number|null} Y grid coordinate of ground level, or null if no ground
-     */
-    findGroundLevel(gridPos, entitySize, maxFallDistance = 10) {
-        for (let y = gridPos.y; y < gridPos.y + maxFallDistance; y++) {
-            const testPos = {x: gridPos.x, y: y};
-            
-            // Check if this position has ground support
-            if (this.hasGroundSupport(testPos)) {
-                if (this.isValidPosition(testPos, entitySize)) {
-                    return y;
-                }
-            }
-        }
-        return null;
-    }
-    
-    /**
-     * Check if entity can jump from current position to target position
-     * @param {Object} from Grid position
-     * @param {Object} to Grid position
-     * @param {Object} entitySize Entity size
-     * @returns {Boolean} True if jump is possible
-     */
-    canJumpTo(from, to, entitySize) {
+    canJumpSimple(from, to, entitySize = {width: 32, height: 32}) {
         const dx = Math.abs(to.x - from.x);
         const dy = from.y - to.y; // Positive if jumping up
         
-        // Simple jump physics check
-        if (dy > this.jumpHeight || dy < 0) return false;
-        if (dx > this.jumpHeight) return false; // Can't jump too far horizontally
+        // Basic constraints
+        if (dy > this.maxJumpHeight || dy < -4) return false; // Can't jump too high or fall too far
+        if (dx > this.maxJumpDistance) return false; // Can't jump too far horizontally
         
-        // For horizontal movement at same level, ensure path is clear
-        if (dy === 0) {
-            const direction = to.x > from.x ? 1 : -1;
-            for (let x = from.x + direction; x !== to.x + direction; x += direction) {
-                if (this.isSolid({x: x, y: from.y})) {
-                    return false; // Blocked horizontally
-                }
-            }
-            return true;
-        }
-        
-        // For actual jumps, check if the jump arc is clear
-        const steps = Math.max(dx, Math.abs(dy)) * 2; // Balanced granular checking
-        for (let i = 1; i <= steps; i++) {
+        // Simple path check - just check a few points along the arc
+        const steps = Math.max(dx, Math.abs(dy)) + 1;
+        for (let i = 1; i < steps; i++) {
             const progress = i / steps;
             const checkX = Math.round(from.x + (to.x - from.x) * progress);
             const checkY = Math.round(from.y + (to.y - from.y) * progress);
-            const checkPos = {x: checkX, y: checkY};
             
-            if (this.isSolid(checkPos)) {
-                return false; // Obstacle in the way
-            }
-        }
-        
-        // Additional check: ensure we're not cutting corners on diagonal jumps
-        if (dx > 0 && dy > 0) {
-            // Check that the positions adjacent to the jump path are also clear
-            const direction = to.x > from.x ? 1 : -1;
-            const midX = from.x + direction;
-            const midY = from.y;
-            
-            // Check the intermediate horizontal position
-            if (this.isSolid({x: midX, y: midY})) {
-                return false; // Would cut through corner
+            // Only check for major obstacles using the correct entity size
+            if (this.isSolid({x: checkX, y: checkY}, entitySize)) {
+                return false;
             }
         }
         
@@ -311,114 +254,162 @@ class AStar {
     }
     
     /**
+     * Check if a position has ground support (simplified)
+     */
+    hasGroundSupport(gridPos, entitySize = {width: 32, height: 32}) {
+        return this.isSolid({x: gridPos.x, y: gridPos.y + 1}, entitySize);
+    }
+    
+    /**
+     * Find ground level by falling down (simplified)
+     */
+    findGroundLevel(gridPos, entitySize, maxFall = 8) {
+        for (let y = gridPos.y; y < gridPos.y + maxFall; y++) {
+            const testPos = {x: gridPos.x, y: y};
+            
+            if (this.hasGroundSupport(testPos, entitySize) && this.isValidPosition(testPos, entitySize)) {
+                return y;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Quick line-of-sight check for nearby targets
+     */
+    canReachDirect(start, goal, entityType, entitySize) {
+        const startGrid = worldToGrid(start.x, start.y);
+        const goalGrid = worldToGrid(goal.x, goal.y);
+        
+        // Only for close targets
+        const dx = Math.abs(goalGrid.x - startGrid.x);
+        const dy = Math.abs(goalGrid.y - startGrid.y);
+        
+        if (dx <= 2 && dy <= 2) {
+            // Check if path is clear using the correct entity size
+            return this.canJumpSimple(startGrid, goalGrid, entitySize);
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Simple movement cost
+     */
+    getSimpleMoveCost(from, to) {
+        const dx = Math.abs(to.x - from.x);
+        const dy = Math.abs(to.y - from.y);
+        
+        // Jumping costs more than walking
+        if (dy > 0) {
+            return 1.0 + (dy * 1.5); // Jump penalty
+        }
+        
+        // Falling is cheap
+        if (dy < 0) {
+            return 1.0 + (Math.abs(dy) * 0.5);
+        }
+        
+        // Horizontal movement
+        return dx > 0 ? 1.0 : 0.5;
+    }
+    
+    /**
      * Check if a grid position is valid (not solid and within bounds)
-     * @param {Object} gridPos Grid coordinates {x, y}
-     * @param {Object} entitySize Entity size in world pixels
-     * @returns {Boolean} True if position is valid
      */
     isValidPosition(gridPos, entitySize) {
-        // Check bounds (you might want to adjust these based on your level size)
+        // Check bounds
         if (gridPos.x < 0 || gridPos.y < 0 || gridPos.x > 100 || gridPos.y > 100) {
             return false;
         }
         
-        // Check if position is solid
-        return !this.isSolid(gridPos);
+        return !this.isSolid(gridPos, entitySize);
     }
     
     /**
-     * Check if a grid position contains a solid block
-     * @param {Object} gridPos Grid coordinates {x, y}
-     * @returns {Boolean} True if position is solid
+     * Check if a grid position contains a solid block (accounting for entity size)
      */
-    isSolid(gridPos) {
-        // Convert grid to world coordinates
+    isSolid(gridPos, entitySize = {width: 32, height: 32}) {
         const worldPos = gridToWorld(gridPos.x, gridPos.y);
         const tileSize = getTilePixelSize();
         
-        // Check if this position collides with any solid blocks
-        // Use full tile size to ensure accurate block detection
-        const isFree = this.gameEngine.collisionManager.isPositionFree(
-            worldPos.x, 
-            worldPos.y, 
-            tileSize, 
-            tileSize
+        // Check multiple positions within the tile to be more thorough
+        // Test center position
+        const centerX = worldPos.x + tileSize / 2 - entitySize.width / 2;
+        const centerY = worldPos.y + tileSize / 2 - entitySize.height / 2;
+        
+        const centerFree = this.gameEngine.collisionManager.isPositionFree(
+            centerX, 
+            centerY, 
+            entitySize.width, 
+            entitySize.height
         );
         
-        return !isFree;
-    }
-    
-    /**
-     * Calculate movement cost between two adjacent grid positions
-     * @param {Object} from Grid position
-     * @param {Object} to Grid position
-     * @param {String} entityType Entity type
-     * @returns {Number} Movement cost
-     */
-    getMoveCost(from, to, entityType) {
-        const dx = Math.abs(to.x - from.x);
-        const dy = Math.abs(to.y - from.y);
-        
-        if (entityType === "flying") {
-            // Diagonal movement costs more
-            return (dx === 1 && dy === 1) ? 1.4 : 1.0;
-        } else if (entityType === "ground") {
-            // Jumping costs more than horizontal movement
-            if (dy > 0) {
-                return 1.0 + (dy * 2); // Jumping penalty
-            }
-            return dx === 1 && dy === 1 ? 1.4 : 1.0;
+        if (this.debugCollisionChecks) {
+            console.log(`A* checking grid(${gridPos.x},${gridPos.y}) -> world(${worldPos.x},${worldPos.y}) -> center(${centerX.toFixed(1)},${centerY.toFixed(1)}) size(${entitySize.width}x${entitySize.height}) = ${centerFree ? 'FREE' : 'BLOCKED'}`);
         }
         
-        return 1.0;
+        if (!centerFree) {
+            return true; // Solid if center position is blocked
+        }
+        
+        // For larger entities, also check corners to be extra safe
+        if (entitySize.width > 32 || entitySize.height > 32) {
+            // Check top-left corner
+            const tlFree = this.gameEngine.collisionManager.isPositionFree(
+                worldPos.x, 
+                worldPos.y, 
+                entitySize.width, 
+                entitySize.height
+            );
+            
+            if (this.debugCollisionChecks) {
+                console.log(`A* corner check grid(${gridPos.x},${gridPos.y}) -> topLeft(${worldPos.x},${worldPos.y}) = ${tlFree ? 'FREE' : 'BLOCKED'}`);
+            }
+            
+            if (!tlFree) {
+                return true;
+            }
+        }
+        
+        return false; // Not solid
     }
     
     /**
-     * Heuristic function (Manhattan distance for ground, Euclidean for flying)
-     * @param {Object} from Grid position
-     * @param {Object} to Grid position
-     * @returns {Number} Heuristic cost
+     * Manhattan distance heuristic
      */
     heuristic(from, to) {
-        const dx = Math.abs(to.x - from.x);
-        const dy = Math.abs(to.y - from.y);
-        
-        // Use Manhattan distance as it works well for platformers
-        return dx + dy;
+        return Math.abs(to.x - from.x) + Math.abs(to.y - from.y);
     }
     
     /**
-     * Reconstruct path from A* result
-     * @param {Map} cameFrom Map of previous positions
-     * @param {Object} current Final grid position
-     * @returns {Array} Array of world coordinate waypoints
+     * Generate a unique key for a grid position
      */
-    reconstructPath(cameFrom, current) {
+    getGridKey(gridPos) {
+        return `${gridPos.x},${gridPos.y}`;
+    }
+    
+    /**
+     * Reconstruct path from A* result with simplified waypoints
+     */
+    reconstructSimplePath(cameFrom, current) {
         const gridPath = [current];
         
-        const currentKey = this.getGridKey(current);
-        let previous = cameFrom.get(currentKey);
-        
+        let previous = cameFrom.get(this.getGridKey(current));
         while (previous) {
             gridPath.unshift(previous);
-            const previousKey = this.getGridKey(previous);
-            previous = cameFrom.get(previousKey);
+            previous = cameFrom.get(this.getGridKey(previous));
         }
         
-        // Simplify path to remove unnecessary waypoints
-        const simplifiedGridPath = this.simplifyGridPath(gridPath);
-        
-        // Convert grid path to world coordinates with proper positioning
+        // Convert to world coordinates with center positioning
         const path = [];
-        for (let i = 0; i < simplifiedGridPath.length; i++) {
-            const gridPos = simplifiedGridPath[i];
+        for (let gridPos of gridPath) {
             const worldPos = gridToWorld(gridPos.x, gridPos.y);
             const tileSize = getTilePixelSize();
             
-            // Position waypoints at the center of tiles for natural movement
             path.push({
                 x: worldPos.x + tileSize / 2,
-                y: worldPos.y + tileSize / 2, // Center of the tile
+                y: worldPos.y + tileSize / 2,
                 gridX: gridPos.x,
                 gridY: gridPos.y
             });
@@ -428,149 +419,47 @@ class AStar {
     }
     
     /**
-     * Simplify grid path by removing unnecessary intermediate waypoints
-     * @param {Array} gridPath Array of grid positions
-     * @returns {Array} Simplified grid path
+     * Enable or disable debug logging
      */
-    simplifyGridPath(gridPath) {
-        if (gridPath.length <= 2) return gridPath;
-        
-        const simplified = [gridPath[0]];
-        
-        for (let i = 1; i < gridPath.length - 1; i++) {
-            const prev = gridPath[i - 1];
-            const curr = gridPath[i];
-            const next = gridPath[i + 1];
-            
-            // IMPROVED: More conservative simplification to prevent corner cutting
-            
-            // Always keep waypoints that involve vertical movement (jumps/falls)
-            if (Math.abs(curr.y - prev.y) > 0 || Math.abs(next.y - curr.y) > 0) {
-                simplified.push(curr);
-                continue;
-            }
-            
-            // Always keep waypoints that change direction significantly
-            const prevDirection = {x: curr.x - prev.x, y: curr.y - prev.y};
-            const nextDirection = {x: next.x - curr.x, y: next.y - curr.y};
-            
-            // If direction changes, keep the waypoint
-            if (prevDirection.x !== nextDirection.x || prevDirection.y !== nextDirection.y) {
-                simplified.push(curr);
-                continue;
-            }
-            
-            // For straight horizontal movement, be more conservative about skipping waypoints
-            if (!this.canTraverseDirect(prev, next)) {
-                simplified.push(curr); // Keep waypoint if direct path is blocked
-            } else {
-                // Even if direct traversal is possible, keep waypoints every few tiles
-                // to prevent long straight paths that might cut corners
-                const distanceFromLast = Math.abs(curr.x - simplified[simplified.length - 1].x);
-                if (distanceFromLast >= 3) { // Keep waypoint every 3 tiles
-                    simplified.push(curr);
-                }
-            }
-        }
-        
-        simplified.push(gridPath[gridPath.length - 1]);
-        return simplified;
+    setDebugLogging(enabled) {
+        this.enableDebugLogging = enabled;
     }
     
     /**
-     * Check if entity can traverse directly between two grid positions
-     * @param {Object} from Grid position
-     * @param {Object} to Grid position
-     * @returns {Boolean} True if direct traversal is possible
+     * Enable or disable collision debugging
      */
-    canTraverseDirect(from, to) {
-        // Only allow direct traversal for horizontal movement at same level
-        if (from.y !== to.y) return false;
+    setCollisionDebugging(enabled) {
+        this.debugCollisionChecks = enabled;
+    }
+    
+    /**
+     * Validate that the path between two waypoints is clear
+     */
+    validatePathBetweenWaypoints(fromGrid, toGrid, entitySize) {
+        const dx = Math.abs(toGrid.x - fromGrid.x);
+        const dy = Math.abs(toGrid.y - fromGrid.y);
         
-        const direction = to.x > from.x ? 1 : -1;
+        // If it's just a single step, we already validated the destination
+        if (dx <= 1 && dy <= 1) {
+            return true;
+        }
         
-        // Check each position between from and to
-        for (let x = from.x + direction; x !== to.x; x += direction) {
-            const checkPos = {x: x, y: from.y};
+        // For longer paths, check intermediate positions
+        const steps = Math.max(dx, dy);
+        for (let i = 1; i < steps; i++) {
+            const progress = i / steps;
+            const checkX = Math.round(fromGrid.x + (toGrid.x - fromGrid.x) * progress);
+            const checkY = Math.round(fromGrid.y + (toGrid.y - fromGrid.y) * progress);
             
-            // If any position is solid, can't traverse directly
-            if (this.isSolid(checkPos)) {
+            const checkPos = {x: checkX, y: checkY};
+            if (this.isSolid(checkPos, entitySize)) {
+                console.log(`  Intermediate position (${checkX},${checkY}) is BLOCKED!`);
                 return false;
-            }
-            
-            // Also check if there's ground support
-            if (!this.hasGroundSupport(checkPos)) {
-                return false; // Would fall, need intermediate waypoint
+            } else {
+                console.log(`  Intermediate position (${checkX},${checkY}) is clear`);
             }
         }
         
         return true;
-    }
-    
-    /**
-     * Generate a unique key for a grid position
-     * @param {Object} gridPos Grid coordinates {x, y}
-     * @returns {String} Unique key
-     */
-    getGridKey(gridPos) {
-        return `${gridPos.x},${gridPos.y}`;
-    }
-    
-    /**
-     * Simplify path by removing unnecessary waypoints
-     * @param {Array} path Array of world coordinate waypoints
-     * @param {String} entityType Entity type
-     * @param {Object} entitySize Entity size
-     * @returns {Array} Simplified path
-     */
-    simplifyPath(path, entityType, entitySize) {
-        if (path.length <= 2) return path;
-        
-        const simplified = [path[0]];
-        
-        for (let i = 1; i < path.length - 1; i++) {
-            const prev = path[i - 1];
-            const curr = path[i];
-            const next = path[i + 1];
-            
-            // Check if we can go directly from prev to next
-            if (!this.canMoveDirect(prev, next, entityType, entitySize)) {
-                simplified.push(curr);
-            }
-        }
-        
-        simplified.push(path[path.length - 1]);
-        return simplified;
-    }
-    
-    /**
-     * Check if entity can move directly between two world positions
-     * @param {Object} from World position
-     * @param {Object} to World position
-     * @param {String} entityType Entity type
-     * @param {Object} entitySize Entity size
-     * @returns {Boolean} True if direct movement is possible
-     */
-    canMoveDirect(from, to, entityType, entitySize) {
-        const fromGrid = worldToGrid(from.x, from.y);
-        const toGrid = worldToGrid(to.x, to.y);
-        
-        // For flying entities, check if path is clear
-        if (entityType === "flying") {
-            const steps = Math.max(Math.abs(toGrid.x - fromGrid.x), Math.abs(toGrid.y - fromGrid.y));
-            
-            for (let i = 1; i < steps; i++) {
-                const checkX = Math.round(fromGrid.x + (toGrid.x - fromGrid.x) * (i / steps));
-                const checkY = Math.round(fromGrid.y + (toGrid.y - fromGrid.y) * (i / steps));
-                
-                if (this.isSolid({x: checkX, y: checkY})) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        
-        // For ground entities, more complex check needed
-        return false; // Conservative approach for ground entities
     }
 }

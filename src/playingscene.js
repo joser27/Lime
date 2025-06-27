@@ -271,6 +271,16 @@ class PlayingScene {
             console.log("Debug mode:", params.debug ? "ON" : "OFF");
         }
         
+        // Output collision map with 'o' key
+        if (this.gameEngine.consumeKey("o")) {
+            this.levelManager.outputCollisionMap();
+        }
+        
+        // Test A* pathfinding with debugging (press 't' key)
+        if (this.gameEngine.consumeKey("t")) {
+            this.testAStarPathfinding();
+        }
+        
         // Check if player is dead (removed from world)
         if (this.player && this.player.removeFromWorld) {
             console.log("Game Over - Player defeated!");
@@ -319,6 +329,46 @@ class PlayingScene {
         this.initGame();
         
         console.log("Game restart completed");
+    }
+    
+    testAStarPathfinding() {
+        console.log("=== TESTING A* PATHFINDING ===");
+        
+        // Enable debugging
+        this.gameEngine.aStar.setDebugLogging(true);
+        this.gameEngine.aStar.setCollisionDebugging(true);
+        
+        // Get MrMan and Player positions
+        const mrman = this.mrman && this.mrman.length > 0 ? this.mrman[0] : null;
+        const player = this.player;
+        
+        if (!mrman || !player) {
+            console.log("Cannot test - MrMan or Player not found");
+            return;
+        }
+        
+        console.log(`MrMan position: (${mrman.x}, ${mrman.y})`);
+        console.log(`Player position: (${player.x}, ${player.y})`);
+        console.log(`MrMan entity size: ${mrman.entitySize.width}x${mrman.entitySize.height}`);
+        
+        // Test pathfinding
+        const start = {x: mrman.x, y: mrman.y};
+        const goal = {x: player.x, y: player.y};
+        
+        console.log("Attempting to find path...");
+        const path = this.gameEngine.aStar.findPath(start, goal, mrman.entityType, mrman.entitySize);
+        
+        if (path) {
+            console.log(`Path found with ${path.length} waypoints`);
+        } else {
+            console.log("No path found");
+        }
+        
+        // Disable debugging after test
+        this.gameEngine.aStar.setDebugLogging(false);
+        this.gameEngine.aStar.setCollisionDebugging(false);
+        
+        console.log("=== A* TEST COMPLETE ===");
     }
     
     handlePlayerAttacks() {

@@ -221,6 +221,149 @@ class LevelManager {
         this.isMapLoaded = false;
     }
 
+    // Output collision map data for debugging
+    outputCollisionMap() {
+        if (!this.isMapLoaded) {
+            console.log("No map loaded - cannot output collision data");
+            return null;
+        }
+
+        console.log("=== COLLISION MAP DATA ===");
+        console.log(`Map dimensions: ${this.mapData.width}x${this.mapData.height} tiles`);
+        console.log(`Tile size: ${this.tileSize}x${this.tileSize} pixels`);
+        console.log(`Scale: ${this.scale}x`);
+        console.log(`World tile size: ${this.tileSize * this.scale}x${this.tileSize * this.scale} pixels`);
+        console.log(`Total blocks created: ${this.blocks.length}`);
+
+        // Create a 2D array representing the collision map
+        const collisionMap = [];
+        for (let y = 0; y < this.mapData.height; y++) {
+            collisionMap[y] = new Array(this.mapData.width).fill(0);
+        }
+
+        // Fill the collision map with block data
+        let solidBlockCount = 0;
+        this.blocks.forEach(block => {
+            const gridPos = worldToGrid(block.x, block.y);
+            if (gridPos.x >= 0 && gridPos.x < this.mapData.width && 
+                gridPos.y >= 0 && gridPos.y < this.mapData.height) {
+                
+                collisionMap[gridPos.y][gridPos.x] = block.isSolid ? 1 : 0;
+                if (block.isSolid) solidBlockCount++;
+            }
+        });
+
+        console.log(`Solid blocks: ${solidBlockCount}`);
+        console.log(`Non-solid blocks: ${this.blocks.length - solidBlockCount}`);
+
+        // Output the collision map as a visual representation
+        console.log("\nCollision Map (1 = solid, 0 = empty):");
+        console.log("X-axis: →");
+        console.log("Y-axis: ↓");
+        
+        // Print column headers (show all columns)
+        let header = "Y\\X ";
+        for (let x = 0; x < this.mapData.width; x++) {
+            if (x < 10) {
+                header += x.toString().padStart(2, ' ');
+            } else {
+                // For double digit numbers, use single character spacing
+                header += x.toString().padStart(2, ' ');
+            }
+        }
+        console.log(header);
+
+        // Print all rows and columns
+        for (let y = 0; y < this.mapData.height; y++) {
+            let row = y.toString().padStart(2, ' ') + " ";
+            for (let x = 0; x < this.mapData.width; x++) {
+                row += collisionMap[y][x].toString().padStart(2, ' ');
+            }
+            console.log(row);
+        }
+
+        console.log(`\nFull collision map displayed (${this.mapData.width}x${this.mapData.height})`);
+
+        // Also output as a compact string for easy copying
+        console.log("\n=== COMPACT COLLISION MAP (for copying) ===");
+        let compactMap = "";
+        for (let y = 0; y < this.mapData.height; y++) {
+            for (let x = 0; x < this.mapData.width; x++) {
+                compactMap += collisionMap[y][x];
+            }
+            compactMap += "\n";
+        }
+        console.log(compactMap);
+
+        // Return the collision map for programmatic use
+        return {
+            width: this.mapData.width,
+            height: this.mapData.height,
+            tileSize: this.tileSize * this.scale,
+            collisionMap: collisionMap,
+            blocks: this.blocks,
+            compactString: compactMap
+        };
+    }
+
+    // Export collision map in different formats
+    exportCollisionMap(format = "array") {
+        if (!this.isMapLoaded) {
+            console.log("No map loaded - cannot export collision data");
+            return null;
+        }
+
+        // Create collision map
+        const collisionMap = [];
+        for (let y = 0; y < this.mapData.height; y++) {
+            collisionMap[y] = new Array(this.mapData.width).fill(0);
+        }
+
+        this.blocks.forEach(block => {
+            const gridPos = worldToGrid(block.x, block.y);
+            if (gridPos.x >= 0 && gridPos.x < this.mapData.width && 
+                gridPos.y >= 0 && gridPos.y < this.mapData.height) {
+                collisionMap[gridPos.y][gridPos.x] = block.isSolid ? 1 : 0;
+            }
+        });
+
+        switch (format.toLowerCase()) {
+            case "json":
+                const jsonData = {
+                    width: this.mapData.width,
+                    height: this.mapData.height,
+                    tileSize: this.tileSize * this.scale,
+                    collisionMap: collisionMap
+                };
+                console.log("JSON Collision Map:");
+                console.log(JSON.stringify(jsonData, null, 2));
+                return jsonData;
+
+            case "csv":
+                let csvData = "";
+                for (let y = 0; y < this.mapData.height; y++) {
+                    csvData += collisionMap[y].join(",") + "\n";
+                }
+                console.log("CSV Collision Map:");
+                console.log(csvData);
+                return csvData;
+
+            case "compact":
+                let compactData = "";
+                for (let y = 0; y < this.mapData.height; y++) {
+                    compactData += collisionMap[y].join("") + "\n";
+                }
+                console.log("Compact Collision Map:");
+                console.log(compactData);
+                return compactData;
+
+            default: // "array"
+                console.log("Array Collision Map:");
+                console.log(collisionMap);
+                return collisionMap;
+        }
+    }
+
     update() {
         // Update logic for blocks will go here
     }
