@@ -198,6 +198,10 @@ class Player {
         this.healthBarWidth = 60; // Width of health bar in pixels
         this.healthBarHeight = 8; // Height of health bar in pixels
         
+        // Pickup system
+        this.heldItem = null; // Currently held item
+        this.pickupRange = 40; // Range to detect pickupable items
+        
         // Invulnerability system
         this.isInvulnerable = false; // Track if player is invulnerable
         this.invulnerabilityTimer = 0;
@@ -394,6 +398,17 @@ class Player {
             }
         }
         
+        // Pickup/Drop input handling (only if not hurt and not face-planted)
+        if (!this.isHurt && !this.isFacePlant && this.gameEngine.consumeKey("e")) {
+            if (this.heldItem) {
+                // Drop the currently held item
+                this.dropItem();
+            } else {
+                // Try to pick up a nearby item
+                this.tryPickupItem();
+            }
+        }
+        
         // Update punch state
         if (this.isPunching) {
             this.punchTimer += this.gameEngine.clockTick;
@@ -550,6 +565,63 @@ class Player {
         }
         
         this.flyingKickBoundingBox.y = this.y + (this.height / 3);
+    }
+    
+    // Pickup system methods
+    tryPickupItem() {
+        // Find nearby pickupable items
+        for (let entity of this.gameEngine.entities) {
+            if (entity.isPickupable && !entity.isHeld && !entity.removeFromWorld) {
+                const distance = getDistance(this, entity);
+                if (distance <= this.pickupRange) {
+                    this.pickupItem(entity);
+                    break; // Only pick up one item at a time
+                }
+            }
+        }
+    }
+    
+    pickupItem(item) {
+        if (this.heldItem || !item.isPickupable) return; // Already holding something or item not pickupable
+        
+        this.heldItem = item;
+        item.isHeld = true;
+        
+        // Call item's pickup method if it exists
+        if (item.onPickup) {
+            item.onPickup(this);
+        }
+        
+        console.log(`Picked up: ${item.constructor.name}`);
+    }
+    
+    dropItem() {
+        if (!this.heldItem) return; // Not holding anything
+        
+        const item = this.heldItem;
+        
+        // Position item in front of player
+        const dropOffset = 40;
+        if (this.direction === "right") {
+            item.x = this.x + dropOffset;
+        } else {
+            item.x = this.x - dropOffset;
+        }
+        item.y = this.y;
+        
+        // Reset item's horizontal velocity to prevent sliding
+        item.horizontalVelocity = 0;
+        
+        // Update item state
+        item.isHeld = false;
+        this.heldItem = null;
+        
+        // Call item's drop method if it exists
+        if (item.onDrop) {
+            item.onDrop(this);
+        }
+        
+        console.log(`Dropped: ${item.constructor.name}`);
     }
 
     draw() {
@@ -753,6 +825,28 @@ class Player {
                 this.gameEngine.ctx.fillText(info, velocityTextPos.x, textY);
             });
         }
+        
+        // Draw held item above player's head
+        if (this.heldItem) {
+            this.drawHeldItem();
+        }
+    }
+    
+    drawHeldItem() {
+        if (!this.heldItem) return;
+        
+        // Position item above player's head
+        const heldItemOffset = {
+            x: 0, // Centered horizontally
+            y: -this.height - 30 // Above player's head, higher to avoid overlap
+        };
+        
+        // Update held item position to follow player
+        this.heldItem.x = this.x + heldItemOffset.x;
+        this.heldItem.y = this.y + heldItemOffset.y;
+        
+        // Draw the held item (force it to show even though it's held)
+        this.heldItem.draw(true);
     }
 
     updateBoundingBox() {

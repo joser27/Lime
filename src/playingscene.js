@@ -62,6 +62,7 @@ class PlayingScene {
         this.levelManager = null;
         this.background = null;
         this.hoveredButton = null;
+        this.bomb = null;
         
         console.log("Game state cleaned up successfully - Scene preserved");
     }
@@ -95,13 +96,17 @@ class PlayingScene {
 
         // Add MrMan enemies
         this.mrman = []; // Array to store all MrMans
-        for (let i = 0; i <= 1; i++) {
-            const mrman = new MrMan(this.gameEngine, this.sceneManager, grid(10 + i * 3), grid(5));
-            this.mrman.push(mrman); // Add MrMan to the array   
-            this.gameEngine.addEntity(mrman);
-        }
+        // for (let i = 0; i <= 1; i++) {
+        //     const mrman = new MrMan(this.gameEngine, this.sceneManager, grid(10 + i * 3), grid(5));
+        //     this.mrman.push(mrman); // Add MrMan to the array   
+        //     this.gameEngine.addEntity(mrman);
+        // }
         this.mrman2 = new MrMan(this.gameEngine, this.sceneManager, grid(10), grid(19));
         this.gameEngine.addEntity(this.mrman2);
+        
+        // Add bomb at position 18,5
+        this.bomb = new Bomb(this.gameEngine, this.sceneManager, grid(18), grid(5));
+        this.gameEngine.addEntity(this.bomb);
         
         // Add flying enemies to demonstrate flying pathfinding
         // this.flyingEnemies = [];
@@ -293,6 +298,9 @@ class PlayingScene {
         
         // Handle MrMan attack interactions
         this.handleMrManAttacks();
+        
+        // Check for entities hitting bombs
+        this.checkBombCollisions();
     }
 
     handleGameOverInput() {
@@ -420,6 +428,8 @@ class PlayingScene {
             this.handlePlayerAttackOnMrMan(hitEntity, attackType);
         } else if (hitEntity instanceof BrokenBrick) {
             this.handlePlayerAttackOnBrokenBrick(hitEntity, attackType);
+        } else if (hitEntity instanceof Bomb) {
+            this.handlePlayerAttackOnBomb(hitEntity, attackType);
         }
         // Note: Block entities are excluded in checkAttackCollisions
         // Add more entity types as needed
@@ -443,9 +453,38 @@ class PlayingScene {
         brokenBrick.removeFromWorld = true;
     }
     
+    handlePlayerAttackOnBomb(bomb, attackType) {
+        console.log(`Player ${attackType} hit the bomb!`);
+        // Trigger bomb explosion
+        bomb.explode();
+    }
+    
     handleMrManAttackOnPlayer(mrman) {
         console.log("MrMan's flying kick hit the player!");
         // Damage the player with the specific MrMan that hit them
         this.player.takeDamage(mrman);
+    }
+    
+    checkBombCollisions() {
+        // Find all bombs in the game
+        const bombs = this.gameEngine.entities.filter(entity => entity instanceof Bomb && !entity.isExploding);
+        
+        for (let bomb of bombs) {
+            // Check if any entity (except player and the bomb itself) is touching the bomb
+            for (let entity of this.gameEngine.entities) {
+                // Skip the bomb itself, player (already handled by attacks), and entities without bounding boxes
+                if (entity === bomb || entity === this.player || !entity.boundingBox) continue;
+                
+                // Skip if entity is held by player
+                if (entity.isHeld) continue;
+                
+                // Check collision between entity and bomb
+                if (this.gameEngine.collisionManager.checkBoxCollision(entity.boundingBox, bomb.boundingBox)) {
+                    console.log(`${entity.constructor.name} ran into the bomb!`);
+                    bomb.explode();
+                    break; // Exit inner loop since bomb is exploding
+                }
+            }
+        }
     }
 }
