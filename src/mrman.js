@@ -589,7 +589,9 @@ class MrMan {
         }
         
         // Check distance to player - use direct follow for close targets
-        const distanceToPlayer = Math.abs(player.x - this.x) + Math.abs(player.y - this.y);
+        const centerPos = this.getCenterPosition();
+        const playerCenter = {x: player.x + (player.width / 2), y: player.y + (player.height / 2)};
+        const distanceToPlayer = Math.abs(playerCenter.x - centerPos.x) + Math.abs(playerCenter.y - centerPos.y);
         if (distanceToPlayer > this.maxPathfindingDistance) {
             this.currentPath = null;
             return;
@@ -597,8 +599,8 @@ class MrMan {
         
         // For very close targets, just move directly (no pathfinding needed)
         if (distanceToPlayer < 100) {
-            const start = {x: this.x, y: this.y};
-            const goal = {x: player.x, y: player.y};
+            const start = {x: centerPos.x, y: centerPos.y};
+            const goal = {x: playerCenter.x, y: playerCenter.y};
             this.currentPath = [start, goal];
             this.currentWaypointIndex = 1;
             return;
@@ -615,9 +617,9 @@ class MrMan {
             return; // Player hasn't moved enough to warrant recalculation
         }
         
-        // Calculate new path using simplified A*
-        const start = {x: this.x, y: this.y};
-        const goal = {x: player.x, y: player.y};
+        // Calculate new path using simplified A* - use center positions for better alignment
+        const start = {x: centerPos.x, y: centerPos.y};
+        const goal = {x: playerCenter.x, y: playerCenter.y};
         
         // Debug: Log the entity size being used (disabled for now)
         // console.log(`MrMan pathfinding: size ${this.entitySize.width}x${this.entitySize.height}, from (${Math.round(start.x)},${Math.round(start.y)}) to (${Math.round(goal.x)},${Math.round(goal.y)})`);
@@ -628,8 +630,8 @@ class MrMan {
             this.currentPath = newPath;
             this.currentWaypointIndex = 1; // Skip first waypoint (current position)
             this.lastPathfindTime = currentTime;
-            this.lastPlayerPosition.x = player.x;
-            this.lastPlayerPosition.y = player.y;
+            this.lastPlayerPosition.x = playerCenter.x;
+            this.lastPlayerPosition.y = playerCenter.y;
             
             if (params.debug) {
                 console.log(`MrMan found path with ${newPath.length} waypoints`);
@@ -645,21 +647,23 @@ class MrMan {
      */
     handleNoPathFound(start, goal, currentTime, player) {
         // Strategy 1: Try to get closer by moving toward player horizontally
-        const horizontalDistance = player.x - this.x;
+        const mrmanCenter = this.getCenterPosition();
+        const playerCenterPos = {x: player.x + (player.width / 2), y: player.y + (player.height / 2)};
+        const horizontalDistance = playerCenterPos.x - mrmanCenter.x;
         const moveDistance = Math.min(Math.abs(horizontalDistance), 96); // Move at most 2 tiles
         
         let intermediateX;
         if (horizontalDistance > 0) {
-            intermediateX = this.x + moveDistance;
+            intermediateX = mrmanCenter.x + moveDistance;
         } else {
-            intermediateX = this.x - moveDistance;
+            intermediateX = mrmanCenter.x - moveDistance;
         }
         
         // Create a simple path toward the player (but not all the way)
-        const intermediateGoal = {x: intermediateX, y: this.y};
+        const intermediateGoal = {x: intermediateX, y: mrmanCenter.y};
         
-        // Check if this intermediate position is reachable
-        const worldPos = {x: intermediateX, y: this.y};
+        // Check if this intermediate position is reachable (convert center to top-left for collision check)
+        const worldPos = {x: intermediateX - (this.width / 2), y: mrmanCenter.y - (this.height / 2)};
         const canReachIntermediate = this.gameEngine.collisionManager.isPositionFree(
             worldPos.x, worldPos.y, this.width, this.height
         );
@@ -674,13 +678,14 @@ class MrMan {
             }
         } else {
             // Strategy 2: Try to find an alternative direction (up or wander)
-            const upPosition = {x: this.x, y: this.y - 48}; // Try going up one tile
+            const upCenterPosition = {x: mrmanCenter.x, y: mrmanCenter.y - 48}; // Try going up one tile
+            const upTopLeftPosition = {x: upCenterPosition.x - (this.width / 2), y: upCenterPosition.y - (this.height / 2)};
             const canMoveUp = this.gameEngine.collisionManager.isPositionFree(
-                upPosition.x, upPosition.y, this.width, this.height
+                upTopLeftPosition.x, upTopLeftPosition.y, this.width, this.height
             );
             
             if (canMoveUp) {
-                this.currentPath = [start, upPosition];
+                this.currentPath = [start, upCenterPosition];
                 this.currentWaypointIndex = 1;
                 
                 if (params.debug) {
@@ -698,8 +703,8 @@ class MrMan {
         }
         
         this.lastPathfindTime = currentTime;
-        this.lastPlayerPosition.x = player.x;
-        this.lastPlayerPosition.y = player.y;
+        this.lastPlayerPosition.x = playerCenterPos.x;
+        this.lastPlayerPosition.y = playerCenterPos.y;
     }
     
         /**
@@ -712,8 +717,9 @@ class MrMan {
         }
         
         const currentWaypoint = this.currentPath[this.currentWaypointIndex];
-        const horizontalDistance = currentWaypoint.x - this.x;
-        const verticalDistance = currentWaypoint.y - this.y;
+        const centerPos = this.getCenterPosition();
+        const horizontalDistance = currentWaypoint.x - centerPos.x;
+        const verticalDistance = currentWaypoint.y - centerPos.y;
         
         // Check if we've reached the current waypoint (simplified)
         const totalDistance = Math.abs(horizontalDistance) + Math.abs(verticalDistance);
@@ -790,8 +796,9 @@ class MrMan {
         }
         
         const currentWaypoint = this.currentPath[this.currentWaypointIndex];
-        const horizontalDistance = currentWaypoint.x - this.x;
-        const verticalDistance = currentWaypoint.y - this.y;
+        const centerPos = this.getCenterPosition();
+        const horizontalDistance = currentWaypoint.x - centerPos.x;
+        const verticalDistance = currentWaypoint.y - centerPos.y;
         
         // Check if waypoint is significantly above us and we're close horizontally
         const isWaypointAbove = verticalDistance < -20; // Waypoint is above us by more than 20 pixels
@@ -1179,6 +1186,24 @@ class MrMan {
         this.boundingBox.y = this.y;
     }
 
+    /**
+     * Get MrMan's center position (for pathfinding alignment)
+     */
+    getCenterPosition() {
+        return {
+            x: this.x + (this.width / 2),
+            y: this.y + (this.height / 2)
+        };
+    }
+
+    /**
+     * Set MrMan's position based on center coordinates
+     */
+    setCenterPosition(centerX, centerY) {
+        this.x = centerX - (this.width / 2);
+        this.y = centerY - (this.height / 2);
+    }
+
     drawHealthDisplay() {
         // Calculate position above MrMan's head
         const healthDisplayPos = this.gameEngine.camera.worldToScreen(this.x, this.y - this.height - 20);
@@ -1351,7 +1376,9 @@ class MrMan {
         if (!player) return 0;
         
         // Simple direct movement towards player (ignore pathfinding)
-        const horizontalDistance = player.x - this.x;
+        const mrmanCenterPos = this.getCenterPosition();
+        const playerCenterPos = {x: player.x + (player.width / 2), y: player.y + (player.height / 2)};
+        const horizontalDistance = playerCenterPos.x - mrmanCenterPos.x;
         
         // Try to move directly towards player
         if (Math.abs(horizontalDistance) > 10) {
